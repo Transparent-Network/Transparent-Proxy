@@ -1,7 +1,5 @@
 # 🚀 Transparent Proxy v2.1.0
 
-**理論上最強のWebプロキシ - Interstellar・Shadow・Utopia超え**
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/yourusername/transparent-proxy/pulls)
@@ -59,8 +57,8 @@
 
 ### クローン
 ```bash
-git clone https://github.com/yourusername/transparent-proxy.git
-cd transparent-proxy
+git clone https://github.com/kotopiro/Transparent-Proxy.git
+cd Transparent-Proxy
 ```
 
 ### 依存関係インストール
@@ -252,14 +250,6 @@ reCAPTCHA・hCAPTCHAを自動検出:
 ## 📄 ライセンス
 
 MIT License - 詳細は [LICENSE](../LICENSE) を参照
-
----
-
-## 🙏 謝辞
-
-- [Ultraviolet](https://github.com/titaniumnetwork-dev/ultraviolet)
-- [Interstellar](https://github.com/interstellarnetwork/interstellar)
-- [Shadow](https://github.com/shadow-proxy/shadow)
 
 ---
 
