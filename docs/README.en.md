@@ -1,7 +1,5 @@
 # 🚀 Transparent Proxy v2.1.0
 
-**The Ultimate Web Proxy - Beyond Interstellar, Shadow, and Utopia**
-
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/kotopiro/Transparent-Proxy/pulls)
@@ -60,7 +58,7 @@
 ### Clone
 ```bash
 git clone https://github.com/kotopiro/Transparent-Proxy.git
-cd transparent-proxy
+cd Transparent-Proxy
 ```
 
 ### Install Dependencies
@@ -241,14 +239,6 @@ Contributions are welcome!
 ## 📄 License
 
 MIT License - See [LICENSE](../LICENSE) for details
-
----
-
-## 🙏 Acknowledgments
-
-- [Ultraviolet](https://github.com/titaniumnetwork-dev/ultraviolet)
-- [Interstellar](https://github.com/interstellarnetwork/interstellar)
-- [Shadow](https://github.com/shadow-proxy/shadow)
 
 ---
 
