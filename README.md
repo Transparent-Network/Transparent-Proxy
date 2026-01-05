@@ -1,4 +1,4 @@
-# 🚀 Transparent Proxy v2.1.0
+#  Transparent Proxy v2.1.0
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
@@ -260,4 +260,4 @@ MIT License - 詳細は [LICENSE](../LICENSE) を参照
 
 ---
 
-**Made with ❤️ by Transparent Proxy Team**
+**Made with by Transparent Proxy Team**
