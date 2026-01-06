@@ -6,30 +6,312 @@
     <title>home</title>
     <link rel="icon" href="https://ssl.gstatic.com/classroom/favicon.png">
     
-    <link rel="stylesheet" href="/assets/css/main.css">
-    <link rel="stylesheet" href="/assets/css/animations.css">
-    <link rel="stylesheet" href="/assets/css/themes.css">
-    <link rel="stylesheet" href="/assets/css/responsive.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #0a0e27;
+            color: #e4e4e7;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 背景グラデーション */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 30% 40%, rgba(0, 217, 255, 0.08) 0%, transparent 60%),
+                        radial-gradient(circle at 70% 70%, rgba(0, 153, 204, 0.06) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .container {
+            position: relative;
+            z-index: 1;
+            height: 100vh;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* ヘッダー */
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 14px 24px;
+            background: rgba(15, 20, 45, 0.85);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 4px 24px rgba(0, 217, 255, 0.15),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .logo {
+            font-size: 18px;
+            font-weight: 600;
+            color: #00d9ff;
+            text-shadow: 0 0 12px rgba(0, 217, 255, 0.5);
+            letter-spacing: 0.5px;
+        }
+
+        .tabs {
+            flex: 1;
+            display: flex;
+            gap: 8px;
+            overflow-x: auto;
+        }
+
+        .tabs::-webkit-scrollbar {
+            height: 4px;
+        }
+
+        .tabs::-webkit-scrollbar-track {
+            background: rgba(0, 217, 255, 0.05);
+        }
+
+        .tabs::-webkit-scrollbar-thumb {
+            background: rgba(0, 217, 255, 0.3);
+            border-radius: 2px;
+        }
+
+        .tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            background: rgba(0, 217, 255, 0.08);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .tab:hover {
+            background: rgba(0, 217, 255, 0.15);
+            border-color: rgba(0, 217, 255, 0.4);
+            box-shadow: 0 2px 12px rgba(0, 217, 255, 0.2);
+        }
+
+        .tab.active {
+            background: rgba(0, 217, 255, 0.18);
+            border-color: rgba(0, 217, 255, 0.5);
+            box-shadow: 0 4px 16px rgba(0, 217, 255, 0.25);
+        }
+
+        .tab-close {
+            opacity: 0.6;
+            margin-left: 6px;
+            font-size: 15px;
+            transition: opacity 0.2s;
+        }
+
+        .tab-close:hover {
+            opacity: 1;
+        }
+
+        .btn-new {
+            padding: 8px 18px;
+            background: rgba(0, 217, 255, 0.12);
+            border: 1px solid rgba(0, 217, 255, 0.35);
+            border-radius: 8px;
+            color: #00d9ff;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .btn-new:hover {
+            background: rgba(0, 217, 255, 0.2);
+            border-color: rgba(0, 217, 255, 0.5);
+            box-shadow: 0 4px 16px rgba(0, 217, 255, 0.3);
+        }
+
+        /* メイン */
+        .main {
+            flex: 1;
+            background: rgba(15, 20, 45, 0.7);
+            border: 1px solid rgba(0, 217, 255, 0.25);
+            border-radius: 16px;
+            backdrop-filter: blur(30px);
+            padding: 60px 50px;
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+            box-shadow: 0 8px 32px rgba(0, 217, 255, 0.12),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.03);
+        }
+
+        /* 検索 */
+        .search {
+            max-width: 650px;
+            margin: 0 auto;
+            width: 100%;
+            position: relative;
+        }
+
+        .search input {
+            width: 100%;
+            padding: 16px 100px 16px 24px;
+            background: rgba(0, 217, 255, 0.05);
+            border: 2px solid rgba(0, 217, 255, 0.3);
+            border-radius: 28px;
+            color: #e4e4e7;
+            font-size: 15px;
+            outline: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .search input:focus {
+            background: rgba(0, 217, 255, 0.1);
+            border-color: rgba(0, 217, 255, 0.5);
+            box-shadow: 0 0 24px rgba(0, 217, 255, 0.2);
+        }
+
+        .search input::placeholder {
+            color: rgba(0, 217, 255, 0.45);
+        }
+
+        .search button {
+            position: absolute;
+            right: 6px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 10px 26px;
+            background: linear-gradient(135deg, rgba(0, 217, 255, 0.2), rgba(0, 217, 255, 0.15));
+            border: 1px solid rgba(0, 217, 255, 0.4);
+            border-radius: 22px;
+            color: #00d9ff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 2px 12px rgba(0, 217, 255, 0.2);
+        }
+
+        .search button:hover {
+            background: linear-gradient(135deg, rgba(0, 217, 255, 0.3), rgba(0, 217, 255, 0.25));
+            border-color: rgba(0, 217, 255, 0.6);
+            box-shadow: 0 4px 20px rgba(0, 217, 255, 0.35);
+            transform: translateY(-50%) scale(1.02);
+        }
+
+        .search button:active {
+            transform: translateY(-50%) scale(0.98);
+        }
+
+        /* ウェルカム */
+        .welcome {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .welcome h1 {
+            font-size: 48px;
+            font-weight: 600;
+            color: #00d9ff;
+            letter-spacing: -0.5px;
+            text-shadow: 0 0 30px rgba(0, 217, 255, 0.4),
+                         0 0 60px rgba(0, 217, 255, 0.2);
+            animation: glow 3s ease-in-out infinite;
+        }
+
+        @keyframes glow {
+            0%, 100% {
+                text-shadow: 0 0 30px rgba(0, 217, 255, 0.4),
+                             0 0 60px rgba(0, 217, 255, 0.2);
+            }
+            50% {
+                text-shadow: 0 0 40px rgba(0, 217, 255, 0.6),
+                             0 0 80px rgba(0, 217, 255, 0.3);
+            }
+        }
+
+        /* フッター */
+        .footer {
+            padding: 12px 24px;
+            background: rgba(15, 20, 45, 0.85);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: rgba(0, 217, 255, 0.6);
+            box-shadow: 0 4px 24px rgba(0, 217, 255, 0.12),
+                        inset 0 1px 0 rgba(255, 255, 255, 0.05);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #00d9ff;
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 8px rgba(0, 217, 255, 0.6);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+                box-shadow: 0 0 8px rgba(0, 217, 255, 0.6);
+            }
+            50% {
+                opacity: 0.6;
+                box-shadow: 0 0 4px rgba(0, 217, 255, 0.3);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container { padding: 16px; }
+            .main { padding: 40px 24px; }
+            .welcome h1 { font-size: 36px; }
+            .search input { padding: 14px 90px 14px 20px; }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <header class="neon-header">
+        <div class="header">
             <div class="logo">Transparent</div>
-            <div class="controls">
-                <div id="tabBar" class="tab-bar"></div>
-                <button id="newTab" class="neon-btn">新規</button>
-            </div>
-        </header>
+            <div class="tabs" id="tabs"></div>
+            <button class="btn-new" id="newTab">新規</button>
+        </div>
 
-        <div id="contentArea" class="content-area">
-            <div class="url-bar">
-                <input type="text" id="urlInput" placeholder="検索またはURLを入力" spellcheck="false">
-                <button id="goBtn" class="go-btn">GO</button>
+        <div class="main">
+            <div class="search">
+                <input type="text" id="input" placeholder="検索またはURLを入力" autocomplete="off">
+                <button id="go">GO</button>
             </div>
+            <div class="welcome">
+                <h1>Transparent</h1>
+            </div>
+        </div>
 
-            <div class="welcome-screen">
-                <h1 class="neon-text">Transparent</h1>
-            </div>
+        <div class="footer">
+            <span><span class="status-dot"></span><span id="status">準備完了</span></span>
+            <span>v2.1.0</span>
         </div>
     </div>
 
@@ -40,15 +322,16 @@
         let counter = 0;
         let windows = {};
 
-        const urlInput = document.getElementById('urlInput');
-        const goBtn = document.getElementById('goBtn');
+        const input = document.getElementById('input');
+        const go = document.getElementById('go');
         const newTab = document.getElementById('newTab');
-        const tabBar = document.getElementById('tabBar');
+        const tabsEl = document.getElementById('tabs');
+        const status = document.getElementById('status');
 
         function init() {
-            goBtn.onclick = handleGo;
+            go.onclick = handleGo;
             newTab.onclick = createTab;
-            urlInput.onkeypress = e => {
+            input.onkeypress = e => {
                 if (e.key === 'Enter') handleGo();
             };
             document.onkeydown = e => {
@@ -65,12 +348,12 @@
             tabs.push({ id, title: '新規タブ', url: '' });
             active = id;
             render();
-            urlInput.value = '';
-            urlInput.focus();
+            input.value = '';
+            input.focus();
         }
 
         function render() {
-            tabBar.innerHTML = '';
+            tabsEl.innerHTML = '';
             tabs.forEach(tab => {
                 const el = document.createElement('div');
                 el.className = 'tab' + (tab.id === active ? ' active' : '');
@@ -82,10 +365,10 @@
                 el.onclick = () => {
                     active = tab.id;
                     const t = tabs.find(x => x.id === active);
-                    if (t) urlInput.value = t.url;
+                    if (t) input.value = t.url;
                     render();
                 };
-                tabBar.appendChild(el);
+                tabsEl.appendChild(el);
             });
         }
 
@@ -105,7 +388,7 @@
             } else if (active === id) {
                 active = tabs[Math.max(0, idx - 1)].id;
                 const t = tabs.find(x => x.id === active);
-                if (t) urlInput.value = t.url;
+                if (t) input.value = t.url;
                 render();
             } else {
                 render();
@@ -113,33 +396,38 @@
         }
 
         function handleGo() {
-            let input = urlInput.value.trim();
-            if (!input) return;
+            let val = input.value.trim();
+            if (!val) return;
 
             let url;
-            if (input.match(/^https?:\/\//)) {
-                url = input;
-            } else if (input.includes('.') && !input.includes(' ')) {
-                url = 'https://' + input;
+            if (val.match(/^https?:\/\//)) {
+                url = val;
+            } else if (val.includes('.') && !val.includes(' ')) {
+                url = 'https://' + val;
             } else {
-                url = SEARCH + encodeURIComponent(input);
+                url = SEARCH + encodeURIComponent(val);
             }
 
             openURL(url);
         }
 
         function openURL(url) {
+            status.textContent = '読み込み中';
+            
             const proxy = '/proxy/' + btoa(url);
             const win = window.open('about:blank');
             
             if (!win) {
                 alert('ポップアップを許可してください');
+                status.textContent = 'ブロック';
                 return;
             }
 
             windows[active] = win;
 
-            win.document.write('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>ホーム</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0e27;overflow:hidden;font-family:-apple-system,sans-serif}.toolbar{position:fixed;top:0;left:0;right:0;height:45px;background:rgba(15,20,45,.9);border-bottom:2px solid #00d9ff;display:flex;align-items:center;padding:0 12px;gap:8px;z-index:9999;backdrop-filter:blur(10px);box-shadow:0 4px 20px rgba(0,217,255,.2)}.btn{width:32px;height:32px;background:rgba(0,217,255,.1);border:1px solid rgba(0,217,255,.3);border-radius:8px;color:#00d9ff;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .2s}.btn:hover{background:rgba(0,217,255,.2);border-color:#00d9ff}.url{flex:1;height:32px;padding:0 12px;background:rgba(0,217,255,.05);border:2px solid rgba(0,217,255,.3);border-radius:20px;color:#00d9ff;font-size:13px;outline:none;transition:all .2s}.url:focus{background:rgba(0,217,255,.1);border-color:#00d9ff}.content{position:fixed;top:45px;left:0;right:0;bottom:0}iframe{width:100%;height:100%;border:none;background:#fff}</style></head><body><div class="toolbar"><button class="btn" onclick="history.back()">◀</button><button class="btn" onclick="history.forward()">▶</button><button class="btn" onclick="reload()">↻</button><button class="btn" onclick="location.href=\'/\'">⌂</button><input class="url" id="urlbar" value="' + url + '" onkeypress="if(event.key===\'Enter\')nav()"><button class="btn" onclick="window.open(\'' + url + '\')">↗</button><button class="btn" onclick="window.close()">✕</button></div><div class="content"><iframe id="frame" src="' + proxy + '"></iframe></div><script>var cUrl="' + url + '";var cProxy="' + proxy + '";function reload(){document.getElementById("frame").src=cProxy}function nav(){var v=document.getElementById("urlbar").value.trim();if(!v)return;var u;if(v.match(/^https?:\\/\\//))u=v;else if(v.includes(".")&&!v.includes(" "))u="https://"+v;else u="https://duckduckgo.com/?q="+encodeURIComponent(v);cUrl=u;cProxy="/proxy/"+btoa(u);document.getElementById("frame").src=cProxy}<\/script></body></html>');
+            const html = '<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>ホーム</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0e27;overflow:hidden;font-family:-apple-system,sans-serif}.bar{position:fixed;top:0;left:0;right:0;height:46px;background:rgba(15,20,45,.9);border-bottom:2px solid rgba(0,217,255,.3);display:flex;align-items:center;padding:0 14px;gap:10px;z-index:9999;backdrop-filter:blur(15px);box-shadow:0 4px 20px rgba(0,217,255,.15)}.btn{width:32px;height:32px;background:rgba(0,217,255,.1);border:1px solid rgba(0,217,255,.25);border-radius:8px;color:#00d9ff;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;transition:all .2s}.btn:hover{background:rgba(0,217,255,.2);border-color:rgba(0,217,255,.4);box-shadow:0 2px 12px rgba(0,217,255,.2)}.url{flex:1;height:32px;padding:0 14px;background:rgba(0,217,255,.05);border:1px solid rgba(0,217,255,.25);border-radius:16px;color:#00d9ff;font-size:13px;outline:none;transition:all .2s}.url:focus{background:rgba(0,217,255,.1);border-color:rgba(0,217,255,.4);box-shadow:0 0 16px rgba(0,217,255,.15)}.content{position:fixed;top:46px;left:0;right:0;bottom:0}iframe{width:100%;height:100%;border:none;background:#fff}</style></head><body><div class="bar"><button class="btn" onclick="history.back()">◀</button><button class="btn" onclick="history.forward()">▶</button><button class="btn" onclick="reload()">↻</button><button class="btn" onclick="location.href=\'/\'">⌂</button><input class="url" id="urlbar" value="' + url + '" onkeypress="if(event.key===\'Enter\')nav()"><button class="btn" onclick="window.open(\'' + url + '\')">↗</button><button class="btn" onclick="window.close()">✕</button></div><div class="content"><iframe id="frame" src="' + proxy + '"></iframe></div><script>var cUrl="' + url + '";var cProxy="' + proxy + '";function reload(){document.getElementById("frame").src=cProxy}function nav(){var v=document.getElementById("urlbar").value.trim();if(!v)return;var u;if(v.match(/^https?:\\/\\//))u=v;else if(v.includes(".")&&!v.includes(" "))u="https://"+v;else u="https://duckduckgo.com/?q="+encodeURIComponent(v);cUrl=u;cProxy="/proxy/"+btoa(u);document.getElementById("frame").src=cProxy}<\/script></body></html>';
+
+            win.document.write(html);
             win.document.close();
 
             const tab = tabs.find(t => t.id === active);
@@ -152,6 +440,11 @@
                 }
                 render();
             }
+
+            status.textContent = '開きました';
+            setTimeout(() => {
+                status.textContent = '準備完了';
+            }, 2000);
         }
 
         window.onload = init;
