@@ -271,10 +271,10 @@
             if (v.match(/^https?:\/\//)) url = v;
             else if (v.includes('.') && !v.includes(' ')) url = 'https://' + v;
             else url = SE + encodeURIComponent(v);
-            open(url);
+            openTab(url);
         }
 
-        function open(url) {
+         function openTab(url) {
             st.textContent = '読み込み中';
             const prx = '/proxy/' + btoa(url);
             const w = window.open('about:blank');
