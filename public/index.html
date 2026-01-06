@@ -1,273 +1,307 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>home</title>
-<link rel="icon" href="https://ssl.gstatic.com/classroom/favicon.png">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ホーム</title>
+    <link rel="icon" href="https://ssl.gstatic.com/classroom/favicon.png">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-<style>
-/* ===== 全体ネオンテーマ ===== */
-*{margin:0;padding:0;box-sizing:border-box}
-body{
-  font-family:system-ui,-apple-system;
-  background:#050816;
-  color:#00eaff;
-  height:100vh;
-  overflow:hidden;
-}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0a0e27;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+        }
 
-.app{height:100vh;display:flex;flex-direction:column}
+        .app {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
 
-/* ===== Header ===== */
-.header{
-  padding:12px 20px;
-  background:rgba(5,8,22,.95);
-  border-bottom:1px solid rgba(0,234,255,.35);
-  display:flex;
-  align-items:center;
-  gap:12px;
-  box-shadow:0 0 15px rgba(0,234,255,.25);
-}
+        /* ヘッダー */
+        .header {
+            padding: 12px 20px;
+            background: rgba(10, 15, 35, 0.95);
+            border-bottom: 1px solid rgba(0, 217, 255, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            backdrop-filter: blur(10px);
+        }
 
-.logo{
-  font-size:16px;
-  font-weight:600;
-  text-shadow:0 0 10px rgba(0,234,255,.8);
-}
+        .logo {
+            font-size: 16px;
+            font-weight: 600;
+            color: #00d9ff;
+            margin-right: 8px;
+        }
 
-.tabs{flex:1;display:flex;gap:6px;overflow-x:auto}
-.tabs::-webkit-scrollbar{height:0}
+        .tabs {
+            flex: 1;
+            display: flex;
+            gap: 6px;
+            overflow-x: auto;
+        }
 
-.tab{
-  display:flex;
-  align-items:center;
-  gap:6px;
-  padding:6px 12px;
-  background:rgba(0,234,255,.08);
-  border:1px solid rgba(0,234,255,.35);
-  border-radius:6px;
-  cursor:pointer;
-  box-shadow:0 0 8px rgba(0,234,255,.3);
-}
+        .tabs::-webkit-scrollbar { height: 0; }
 
-.tab.active{
-  background:rgba(0,234,255,.2);
-  box-shadow:0 0 14px rgba(0,234,255,.7);
-}
+        .tab {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: rgba(0, 217, 255, 0.05);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.2s;
+        }
 
-.tab-close{opacity:.7}
-.tab-close:hover{opacity:1}
+        .tab:hover {
+            background: rgba(0, 217, 255, 0.1);
+            border-color: rgba(0, 217, 255, 0.4);
+        }
 
-.new-btn{
-  padding:6px 14px;
-  background:rgba(0,234,255,.12);
-  border:1px solid rgba(0,234,255,.4);
-  border-radius:6px;
-  color:#00eaff;
-  cursor:pointer;
-  box-shadow:0 0 10px rgba(0,234,255,.4);
-}
+        .tab.active {
+            background: rgba(0, 217, 255, 0.15);
+            border-color: rgba(0, 217, 255, 0.5);
+        }
 
-/* ===== Main ===== */
-.main{
-  flex:1;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:30px;
-}
+        .tab-close {
+            opacity: 0.6;
+            font-size: 14px;
+        }
 
-.search{width:100%;max-width:700px;position:relative}
+        .tab-close:hover { opacity: 1; }
 
-.search input{
-  width:100%;
-  padding:14px 90px 14px 20px;
-  background:rgba(0,234,255,.06);
-  border:1px solid rgba(0,234,255,.4);
-  border-radius:25px;
-  color:#00eaff;
-  box-shadow:inset 0 0 14px rgba(0,234,255,.3);
-}
+        .new-btn {
+            padding: 6px 14px;
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 6px;
+            color: #00d9ff;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
 
-.search button{
-  position:absolute;
-  right:5px;
-  top:50%;
-  transform:translateY(-50%);
-  padding:8px 24px;
-  background:rgba(0,234,255,.2);
-  border:1px solid rgba(0,234,255,.5);
-  border-radius:20px;
-  color:#00eaff;
-  cursor:pointer;
-  box-shadow:0 0 14px rgba(0,234,255,.7);
-}
+        .new-btn:hover {
+            background: rgba(0, 217, 255, 0.2);
+            border-color: rgba(0, 217, 255, 0.5);
+        }
 
-.title{
-  font-size:42px;
-  text-shadow:0 0 20px rgba(0,234,255,1);
-}
+        /* メイン */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            gap: 30px;
+            align-items: center;
+            justify-content: center;
+        }
 
-/* ===== Footer ===== */
-.footer{
-  padding:10px 20px;
-  background:rgba(5,8,22,.95);
-  border-top:1px solid rgba(0,234,255,.35);
-  display:flex;
-  justify-content:space-between;
-  font-size:12px;
-}
-</style>
+        .search {
+            width: 100%;
+            max-width: 700px;
+            position: relative;
+        }
+
+        .search input {
+            width: 100%;
+            padding: 14px 90px 14px 20px;
+            background: rgba(0, 217, 255, 0.05);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 25px;
+            color: #fff;
+            font-size: 15px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .search input:focus {
+            background: rgba(0, 217, 255, 0.1);
+            border-color: rgba(0, 217, 255, 0.5);
+        }
+
+        .search input::placeholder {
+            color: rgba(0, 217, 255, 0.5);
+        }
+
+        .search button {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 8px 24px;
+            background: rgba(0, 217, 255, 0.15);
+            border: 1px solid rgba(0, 217, 255, 0.4);
+            border-radius: 20px;
+            color: #00d9ff;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .search button:hover {
+            background: rgba(0, 217, 255, 0.25);
+            border-color: rgba(0, 217, 255, 0.6);
+        }
+
+        .title {
+            font-size: 42px;
+            font-weight: 600;
+            color: #00d9ff;
+            text-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
+        }
+
+        /* フッター */
+        .footer {
+            padding: 10px 20px;
+            background: rgba(10, 15, 35, 0.95);
+            border-top: 1px solid rgba(0, 217, 255, 0.3);
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: rgba(0, 217, 255, 0.6);
+        }
+    </style>
 </head>
-
 <body>
-<div class="app">
-  <div class="header">
-    <div class="logo">Transparent</div>
-    <div class="tabs" id="tabs"></div>
-    <button class="new-btn" id="new">新規</button>
-  </div>
+    <div class="app">
+        <div class="header">
+            <div class="logo">Transparent</div>
+            <div class="tabs" id="tabs"></div>
+            <button class="new-btn" id="new">新規</button>
+        </div>
 
-  <div class="main">
-    <div class="search">
-      <input id="input" placeholder="検索またはURLを入力">
-      <button id="go">GO</button>
+        <div class="main">
+            <div class="search">
+                <input type="text" id="input" placeholder="検索またはURLを入力" autocomplete="off">
+                <button id="go">GO</button>
+            </div>
+            <div class="title">Transparent</div>
+        </div>
+
+        <div class="footer">
+            <span id="status">準備完了</span>
+            <span>v2.1</span>
+        </div>
     </div>
-    <div class="title">Transparent</div>
-  </div>
 
-  <div class="footer">
-    <span id="status">準備完了</span>
-    <span>v2.1</span>
-  </div>
-</div>
+    <script>
+        const SE = 'https://duckduckgo.com/?q=';
+        let tabs = [], act = null, cnt = 0, wins = {};
+        const inp = document.getElementById('input');
+        const go = document.getElementById('go');
+        const nb = document.getElementById('new');
+        const tb = document.getElementById('tabs');
+        const st = document.getElementById('status');
 
-<script>
-const SE="https://duckduckgo.com/?q="
-let tabs=[],act=null,cnt=0,wins={}
+        function init() {
+            go.onclick = handleGo;
+            nb.onclick = newTab;
+            inp.onkeypress = e => { if (e.key === 'Enter') handleGo(); };
+            document.onkeydown = e => {
+                if (e.ctrlKey && e.key === 't') { e.preventDefault(); newTab(); }
+            };
+            newTab();
+        }
 
-const inp=input
-const go=document.getElementById("go")
-const nb=document.getElementById("new")
-const tb=document.getElementById("tabs")
-const st=document.getElementById("status")
+        function newTab() {
+            const id = cnt++;
+            tabs.push({ id, t: '新規', u: '' });
+            act = id;
+            draw();
+            inp.value = '';
+            inp.focus();
+        }
 
-function init(){
-  go.onclick=handleGo
-  nb.onclick=newTab
-  inp.onkeypress=e=>e.key==="Enter"&&handleGo()
-  newTab()
-}
+        function draw() {
+            tb.innerHTML = '';
+            tabs.forEach(tab => {
+                const d = document.createElement('div');
+                d.className = 'tab' + (tab.id === act ? ' active' : '');
+                d.innerHTML = `<span>${tab.t}</span><span class="tab-close">×</span>`;
+                d.querySelector('.tab-close').onclick = e => {
+                    e.stopPropagation();
+                    close(tab.id);
+                };
+                d.onclick = () => {
+                    act = tab.id;
+                    const x = tabs.find(t => t.id === act);
+                    if (x) inp.value = x.u;
+                    draw();
+                };
+                tb.appendChild(d);
+            });
+        }
 
-function newTab(){
-  const id=cnt++
-  tabs.push({id,t:"新規",u:""})
-  act=id
-  draw()
-}
+        function close(id) {
+            const i = tabs.findIndex(t => t.id === id);
+            if (i === -1) return;
+            if (wins[id] && !wins[id].closed) wins[id].close();
+            delete wins[id];
+            tabs.splice(i, 1);
+            if (tabs.length === 0) newTab();
+            else if (act === id) {
+                act = tabs[Math.max(0, i - 1)].id;
+                const x = tabs.find(t => t.id === act);
+                if (x) inp.value = x.u;
+                draw();
+            } else draw();
+        }
 
-function draw(){
-  tb.innerHTML=""
-  tabs.forEach(tab=>{
-    const d=document.createElement("div")
-    d.className="tab"+(tab.id===act?" active":"")
-    d.innerHTML=`<span>${tab.t}</span><span class="tab-close">×</span>`
-    d.onclick=()=>{act=tab.id;inp.value=tab.u;draw()}
-    d.querySelector(".tab-close").onclick=e=>{
-      e.stopPropagation()
-      closeTab(tab.id)
-    }
-    tb.appendChild(d)
-  })
-}
+        function handleGo() {
+            let v = inp.value.trim();
+            if (!v) return;
+            let url;
+            if (v.match(/^https?:\/\//)) url = v;
+            else if (v.includes('.') && !v.includes(' ')) url = 'https://' + v;
+            else url = SE + encodeURIComponent(v);
+            open(url);
+        }
 
-function closeTab(id){
-  const i=tabs.findIndex(t=>t.id===id)
-  if(i===-1)return
-  if(wins[id]&&!wins[id].closed)wins[id].close()
-  tabs.splice(i,1)
-  if(!tabs.length)newTab()
-  else{act=tabs[Math.max(0,i-1)].id;draw()}
-}
+        function open(url) {
+            st.textContent = '読み込み中';
+            const prx = '/proxy/' + btoa(url);
+            const w = window.open('about:blank');
+            if (!w) {
+                alert('ポップアップを許可してください');
+                st.textContent = 'ブロック';
+                return;
+            }
+            wins[act] = w;
+            
+            const h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>about:blank</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0e27;overflow:hidden}.bar{position:fixed;top:0;left:0;right:0;height:44px;background:rgba(10,15,35,.95);border-bottom:1px solid rgba(0,217,255,.3);display:flex;align-items:center;padding:0 12px;gap:8px;z-index:999;backdrop-filter:blur(10px)}.btn{width:30px;height:30px;background:rgba(0,217,255,.08);border:1px solid rgba(0,217,255,.2);border-radius:6px;color:#00d9ff;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .2s}.btn:hover{background:rgba(0,217,255,.15);border-color:rgba(0,217,255,.4)}.url{flex:1;height:30px;padding:0 12px;background:rgba(0,217,255,.05);border:1px solid rgba(0,217,255,.2);border-radius:15px;color:#00d9ff;font-size:13px;outline:none;transition:all .2s}.url:focus{background:rgba(0,217,255,.1);border-color:rgba(0,217,255,.4)}.content{position:fixed;top:44px;left:0;right:0;bottom:0}iframe{width:100%;height:100%;border:none;background:#fff}</style></head><body><div class="bar"><button class="btn" onclick="history.back()">◀</button><button class="btn" onclick="history.forward()">▶</button><button class="btn" onclick="reload()">↻</button><button class="btn" onclick="home()">⌂</button><input class="url" id="u" value="${url}" onkeypress="if(event.key==='Enter')nav()"><button class="btn" onclick="ext()">↗</button><button class="btn" onclick="window.close()">✕</button></div><div class="content"><iframe id="f" src="${prx}"></iframe></div><script>var cu="${url}";var cp="${prx}";function reload(){var f=document.getElementById("f");f.src="";setTimeout(()=>{f.src=cp},50)}function home(){location.href="/"}function nav(){var v=document.getElementById("u").value.trim();if(!v)return;var nu;if(v.match(/^https?:\\/\\//))nu=v;else if(v.includes(".")&&!v.includes(" "))nu="https://"+v;else nu="https://duckduckgo.com/?q="+encodeURIComponent(v);cu=nu;cp="/proxy/"+btoa(nu);reload()}function ext(){window.open(cu)}<\/script></body></html>`;
+            
+            w.document.write(h);
+            w.document.close();
 
-function handleGo(){
-  let v=inp.value.trim()
-  if(!v)return
-  let url
-  if(/^https?:\/\//.test(v))url=v
-  else if(v.includes(".")&&!v.includes(" "))url="https://"+v
-  else url=SE+encodeURIComponent(v)
-  openPage(url)
-}
+            const tab = tabs.find(t => t.id === act);
+            if (tab) {
+                tab.u = url;
+                try { tab.t = new URL(url).hostname; }
+                catch (e) { tab.t = 'ページ'; }
+                draw();
+            }
+            st.textContent = '開きました';
+            setTimeout(() => st.textContent = '準備完了', 2000);
+        }
 
-function openPage(url){
-  const prx="/proxy/"+btoa(url)
-  const w=window.open("about:blank")
-  wins[act]=w
-
-  w.document.write(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<title>about:blank</title>
-<style>
-body{margin:0;background:#050816;color:#00eaff;font-family:system-ui}
-.bar{
-  height:44px;
-  background:rgba(5,8,22,.95);
-  border-bottom:1px solid rgba(0,234,255,.4);
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:0 10px;
-  box-shadow:0 0 15px rgba(0,234,255,.4);
-}
-button{
-  width:30px;height:30px;
-  background:rgba(0,234,255,.1);
-  border:1px solid rgba(0,234,255,.4);
-  color:#00eaff;
-  border-radius:6px;
-  cursor:pointer;
-  box-shadow:0 0 10px rgba(0,234,255,.6);
-}
-input{
-  flex:1;height:30px;
-  background:rgba(0,234,255,.06);
-  border:1px solid rgba(0,234,255,.4);
-  border-radius:15px;
-  padding:0 10px;
-  color:#00eaff;
-}
-iframe{
-  position:fixed;
-  top:44px;left:0;
-  width:100%;height:calc(100% - 44px);
-  border:none;
-}
-</style>
-</head>
-<body>
-<div class="bar">
-<button onclick="history.back()">◀</button>
-<button onclick="history.forward()">▶</button>
-<button onclick="location.reload()">↻</button>
-<input value="${url}">
-<button onclick="window.close()">✕</button>
-</div>
-<iframe src="${prx}"></iframe>
-</body></html>`)
-
-  w.document.close()
-
-  const tab=tabs.find(t=>t.id===act)
-  tab.u=url
-  try{tab.t=new URL(url).hostname}catch{tab.t="page"}
-  draw()
-}
-
-window.onload=init
-</script>
+        window.onload = init;
+    </script>
 </body>
 </html>
