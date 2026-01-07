@@ -286,3 +286,32 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 module.exports = app;
+// HTMLの場合は書き換え
+if (contentType.includes('text/html')) {
+    let html = await response.text();
+    
+    // <base>タグ注入（既存）
+    const baseUrl = new URL(targetUrl).origin;
+    const baseTag = `<base href="${baseUrl}/">`;
+    
+    if (html.includes('<head>')) {
+        html = html.replace('<head>', `<head>${baseTag}`);
+    } else if (html.includes('<html>')) {
+        html = html.replace('<html>', `<html><head>${baseTag}</head>`);
+    } else {
+        html = `<!DOCTYPE html><html><head>${baseTag}</head><body>${html}</body></html>`;
+    }
+    
+    // CSP削除（既存）
+    html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
+    html = html.replace(/<meta[^>]*http-equiv=["']X-Frame-Options["'][^>]*>/gi, '');
+    
+    // YouTube特化対応（NEW）
+    if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
+        // iframe埋め込み許可
+        html = html.replace(/<meta[^>]*name=["']referrer["'][^>]*>/gi, '');
+        html = html.replace('</head>', '<meta name="referrer" content="no-referrer"></head>');
+    }
+    
+    return res.send(html);
+}
