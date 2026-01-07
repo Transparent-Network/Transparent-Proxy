@@ -27,7 +27,6 @@
             flex-direction: column;
         }
 
-        /* ヘッダー */
         .header {
             padding: 12px 20px;
             background: rgba(10, 15, 35, 0.95);
@@ -101,7 +100,6 @@
             border-color: rgba(0, 217, 255, 0.5);
         }
 
-        /* メイン */
         .main {
             flex: 1;
             display: flex;
@@ -167,7 +165,6 @@
             text-shadow: 0 0 20px rgba(0, 217, 255, 0.5);
         }
 
-        /* フッター */
         .footer {
             padding: 10px 20px;
             background: rgba(10, 15, 35, 0.95);
@@ -234,34 +231,44 @@
             tabs.forEach(tab => {
                 const d = document.createElement('div');
                 d.className = 'tab' + (tab.id === act ? ' active' : '');
-                d.innerHTML = `<span>${tab.t}</span><span class="tab-close">×</span>`;
-                d.querySelector('.tab-close').onclick = e => {
+                const span = document.createElement('span');
+                span.textContent = tab.t;
+                const close = document.createElement('span');
+                close.className = 'tab-close';
+                close.textContent = '×';
+                close.onclick = e => {
                     e.stopPropagation();
-                    close(tab.id);
+                    closeTab(tab.id);
                 };
-                d.onclick = () => {
+                d.onclick = e => {
+                    if (e.target === close) return;
                     act = tab.id;
                     const x = tabs.find(t => t.id === act);
                     if (x) inp.value = x.u;
                     draw();
                 };
+                d.appendChild(span);
+                d.appendChild(close);
                 tb.appendChild(d);
             });
         }
 
-        function close(id) {
+        function closeTab(id) {
             const i = tabs.findIndex(t => t.id === id);
             if (i === -1) return;
             if (wins[id] && !wins[id].closed) wins[id].close();
             delete wins[id];
             tabs.splice(i, 1);
-            if (tabs.length === 0) newTab();
-            else if (act === id) {
+            if (tabs.length === 0) {
+                newTab();
+            } else if (act === id) {
                 act = tabs[Math.max(0, i - 1)].id;
                 const x = tabs.find(t => t.id === act);
                 if (x) inp.value = x.u;
                 draw();
-            } else draw();
+            } else {
+                draw();
+            }
         }
 
         function handleGo() {
@@ -271,10 +278,10 @@
             if (v.match(/^https?:\/\//)) url = v;
             else if (v.includes('.') && !v.includes(' ')) url = 'https://' + v;
             else url = SE + encodeURIComponent(v);
-            openTab(url);
+            openURL(url);
         }
 
-         function openTab(url) {
+        function openURL(url) {
             st.textContent = '読み込み中';
             const prx = '/proxy/' + btoa(url);
             const w = window.open('about:blank');
@@ -285,7 +292,7 @@
             }
             wins[act] = w;
             
-            const h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>about:blank</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0e27;overflow:hidden}.bar{position:fixed;top:0;left:0;right:0;height:44px;background:rgba(10,15,35,.95);border-bottom:1px solid rgba(0,217,255,.3);display:flex;align-items:center;padding:0 12px;gap:8px;z-index:999;backdrop-filter:blur(10px)}.btn{width:30px;height:30px;background:rgba(0,217,255,.08);border:1px solid rgba(0,217,255,.2);border-radius:6px;color:#00d9ff;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .2s}.btn:hover{background:rgba(0,217,255,.15);border-color:rgba(0,217,255,.4)}.url{flex:1;height:30px;padding:0 12px;background:rgba(0,217,255,.05);border:1px solid rgba(0,217,255,.2);border-radius:15px;color:#00d9ff;font-size:13px;outline:none;transition:all .2s}.url:focus{background:rgba(0,217,255,.1);border-color:rgba(0,217,255,.4)}.content{position:fixed;top:44px;left:0;right:0;bottom:0}iframe{width:100%;height:100%;border:none;background:#fff}</style></head><body><div class="bar"><button class="btn" onclick="history.back()">◀</button><button class="btn" onclick="history.forward()">▶</button><button class="btn" onclick="reload()">↻</button><button class="btn" onclick="home()">⌂</button><input class="url" id="u" value="${url}" onkeypress="if(event.key==='Enter')nav()"><button class="btn" onclick="ext()">↗</button><button class="btn" onclick="window.close()">✕</button></div><div class="content"><iframe id="f" src="${prx}"></iframe></div><script>var cu="${url}";var cp="${prx}";function reload(){var f=document.getElementById("f");f.src="";setTimeout(()=>{f.src=cp},50)}function home(){location.href="/"}function nav(){var v=document.getElementById("u").value.trim();if(!v)return;var nu;if(v.match(/^https?:\\/\\//))nu=v;else if(v.includes(".")&&!v.includes(" "))nu="https://"+v;else nu="https://duckduckgo.com/?q="+encodeURIComponent(v);cu=nu;cp="/proxy/"+btoa(nu);reload()}function ext(){window.open(cu)}<\/script></body></html>`;
+            const h = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>home</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0e27;overflow:hidden}.bar{position:fixed;top:0;left:0;right:0;height:44px;background:rgba(10,15,35,.95);border-bottom:1px solid rgba(0,217,255,.3);display:flex;align-items:center;padding:0 12px;gap:8px;z-index:999;backdrop-filter:blur(10px)}.btn{width:30px;height:30px;background:rgba(0,217,255,.08);border:1px solid rgba(0,217,255,.2);border-radius:6px;color:#00d9ff;cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .2s}.btn:hover{background:rgba(0,217,255,.15);border-color:rgba(0,217,255,.4)}.url{flex:1;height:30px;padding:0 12px;background:rgba(0,217,255,.05);border:1px solid rgba(0,217,255,.2);border-radius:15px;color:#00d9ff;font-size:13px;outline:none;transition:all .2s}.url:focus{background:rgba(0,217,255,.1);border-color:rgba(0,217,255,.4)}.content{position:fixed;top:44px;left:0;right:0;bottom:0}iframe{width:100%;height:100%;border:none;background:#fff}</style></head><body><div class="bar"><button class="btn" onclick="back()">◀</button><button class="btn" onclick="forward()">▶</button><button class="btn" onclick="reload()">↻</button><button class="btn" onclick="home()">⌂</button><input class="url" id="u" value="${url}" onkeypress="if(event.key==='Enter')nav()"><button class="btn" onclick="ext()">↗</button><button class="btn" onclick="window.close()">✕</button></div><div class="content"><iframe id="f" src="${prx}"></iframe></div><script>var cu="${url.replace(/"/g, '\\"')}";var cp="${prx}";function back(){var f=document.getElementById("f");try{f.contentWindow.history.back()}catch(e){history.back()}}function forward(){var f=document.getElementById("f");try{f.contentWindow.history.forward()}catch(e){history.forward()}}function reload(){var f=document.getElementById("f");var s=f.src;f.src="about:blank";setTimeout(function(){f.src=s},100)}function home(){location.href="/"}function nav(){var v=document.getElementById("u").value.trim();if(!v)return;var nu;if(v.match(/^https?:\\/\\//))nu=v;else if(v.includes(".")&&!v.includes(" "))nu="https://"+v;else nu="https://duckduckgo.com/?q="+encodeURIComponent(v);cu=nu;cp="/proxy/"+btoa(nu);var f=document.getElementById("f");f.src=cp}function ext(){window.open(cu)}<\/script></body></html>`;
             
             w.document.write(h);
             w.document.close();
