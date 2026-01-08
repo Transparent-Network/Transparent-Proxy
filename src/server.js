@@ -1,9 +1,10 @@
 // src/server.js - 最終完全修正版
-// RateLimiter問題 + 全エラー完全対応
+// async/await エラー完全修正
 
 const express = require('express');
 const fetch = require('node-fetch');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 
@@ -15,7 +16,6 @@ console.log('📁 ROOT:', ROOT_DIR);
 console.log('📁 PUBLIC:', PUBLIC_DIR);
 
 // index.html確認
-const fs = require('fs');
 if (fs.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
     console.log('✅ index.html found');
 } else {
@@ -26,7 +26,7 @@ if (fs.existsSync(path.join(PUBLIC_DIR, 'index.html'))) {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// CORS（シンプル版）
+// CORS
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
@@ -89,7 +89,7 @@ app.get('/api/config', (req, res) => {
     });
 });
 
-// ========== プロキシ（完全埋め込み版） ==========
+// ========== プロキシエンドポイント（async修正版） ==========
 app.all('/proxy/:encodedUrl(*)', async (req, res) => {
     console.log('🌐 Proxy request:', req.params.encodedUrl);
     
@@ -150,7 +150,7 @@ app.all('/proxy/:encodedUrl(*)', async (req, res) => {
         res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
         res.setHeader('Access-Control-Allow-Headers', '*');
         
-        // Cache-Control（プロキシでは短めに）
+        // Cache-Control
         res.setHeader('Cache-Control', 'public, max-age=300');
         
         // HTMLの場合は書き換え
@@ -172,6 +172,12 @@ app.all('/proxy/:encodedUrl(*)', async (req, res) => {
             // CSP削除
             html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
             html = html.replace(/<meta[^>]*http-equiv=["']X-Frame-Options["'][^>]*>/gi, '');
+            
+            // YouTube特化対応
+            if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
+                html = html.replace(/<meta[^>]*name=["']referrer["'][^>]*>/gi, '');
+                html = html.replace('</head>', '<meta name="referrer" content="no-referrer"></head>');
+            }
             
             console.log('📝 HTML書き換え完了');
             return res.send(html);
@@ -286,32 +292,3 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 module.exports = app;
-// HTMLの場合は書き換え
-if (contentType.includes('text/html')) {
-    let html = await response.text();
-    
-    // <base>タグ注入（既存）
-    const baseUrl = new URL(targetUrl).origin;
-    const baseTag = `<base href="${baseUrl}/">`;
-    
-    if (html.includes('<head>')) {
-        html = html.replace('<head>', `<head>${baseTag}`);
-    } else if (html.includes('<html>')) {
-        html = html.replace('<html>', `<html><head>${baseTag}</head>`);
-    } else {
-        html = `<!DOCTYPE html><html><head>${baseTag}</head><body>${html}</body></html>`;
-    }
-    
-    // CSP削除（既存）
-    html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
-    html = html.replace(/<meta[^>]*http-equiv=["']X-Frame-Options["'][^>]*>/gi, '');
-    
-    // YouTube特化対応（NEW）
-    if (targetUrl.includes('youtube.com') || targetUrl.includes('youtu.be')) {
-        // iframe埋め込み許可
-        html = html.replace(/<meta[^>]*name=["']referrer["'][^>]*>/gi, '');
-        html = html.replace('</head>', '<meta name="referrer" content="no-referrer"></head>');
-    }
-    
-    return res.send(html);
-}
