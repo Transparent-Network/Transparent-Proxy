@@ -179,7 +179,7 @@ function rewriteHtml(html, targetUrl) {
           fullUrl = new URL(href, targetUrl).href;
         }
         
-        // プロキシURL化
+        // プロキシURL化（UTF-8対応）
         const encoded = Buffer.from(fullUrl).toString('base64');
         return `<a ${before}href="${proxyBase}${encoded}"${after}>`;
       } catch (e) {
@@ -222,10 +222,13 @@ function rewriteHtml(html, targetUrl) {
     `;
     html = html.replace(/<\/head>/i, `${metaTags}</head>`);
     
-    // 6. JavaScriptでのナビゲーション対策（window.location等）
+    // 6. JavaScriptでのナビゲーション対策（トップウィンドウから隔離）
     const proxyScript = `
     <script>
     (function() {
+      // iframe内でのみ実行（トップウィンドウでは実行しない）
+      if (window.top === window.self) return;
+      
       const proxyBase = '${proxyBase}';
       const originalOpen = window.open;
       const originalPushState = history.pushState;
@@ -236,7 +239,7 @@ function rewriteHtml(html, targetUrl) {
         if (url && !url.startsWith('javascript:') && !url.startsWith('about:') && !url.startsWith('data:')) {
           try {
             const fullUrl = new URL(url, window.location.href).href;
-            const encoded = btoa(fullUrl);
+            const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
             return originalOpen.call(this, proxyBase + encoded, target, features);
           } catch (e) {}
         }
@@ -248,7 +251,7 @@ function rewriteHtml(html, targetUrl) {
         if (url && !url.startsWith(proxyBase)) {
           try {
             const fullUrl = new URL(url, window.location.href).href;
-            const encoded = btoa(fullUrl);
+            const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
             return originalPushState.call(this, state, title, proxyBase + encoded);
           } catch (e) {}
         }
@@ -260,7 +263,7 @@ function rewriteHtml(html, targetUrl) {
         if (url && !url.startsWith(proxyBase)) {
           try {
             const fullUrl = new URL(url, window.location.href).href;
-            const encoded = btoa(fullUrl);
+            const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
             return originalReplaceState.call(this, state, title, proxyBase + encoded);
           } catch (e) {}
         }
