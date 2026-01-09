@@ -210,15 +210,15 @@ function rewriteHtml(html, targetUrl) {
       }
     });
     
-    // 4. 制限メタタグ削除
+    // 4. 制限メタタグ削除（すべて）
     html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
     html = html.replace(/<meta[^>]*http-equiv=["']X-Frame-Options["'][^>]*>/gi, '');
     html = html.replace(/<meta[^>]*name=["']referrer["'][^>]*>/gi, '');
+    html = html.replace(/<meta[^>]*property=["']csp-nonce["'][^>]*>/gi, '');
     
     // 5. 必須メタタグ追加
     const metaTags = `
       <meta name="referrer" content="no-referrer">
-      <meta http-equiv="X-Frame-Options" content="ALLOWALL">
     `;
     html = html.replace(/<\/head>/i, `${metaTags}</head>`);
     
@@ -274,8 +274,9 @@ function rewriteHtml(html, targetUrl) {
     `;
     html = html.replace(/<\/body>/i, `${proxyScript}</body>`);
     
-    // 7. SNS特化対応
-    const socialDomains = [
+    // 7. SNS/GitHub特化対応
+    const strictDomains = [
+      'github.com', 'gitlab.com',
       'youtube.com', 'youtu.be', 
       'tiktok.com', 
       'twitter.com', 'x.com',
@@ -283,11 +284,8 @@ function rewriteHtml(html, targetUrl) {
       'facebook.com', 'fb.com'
     ];
     
-    if (socialDomains.some(domain => targetUrl.includes(domain))) {
-      html = html.replace(/<\/head>/i, `
-        <meta http-equiv="Content-Security-Policy" content="frame-ancestors *">
-        <style>body{overflow:auto!important;position:relative!important}</style>
-      </head>`);
+    if (strictDomains.some(domain => targetUrl.includes(domain))) {
+      // 何もしない（HTTPヘッダーで処理済み）
     }
     
     return html;
