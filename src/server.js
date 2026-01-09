@@ -134,27 +134,96 @@ function processHeaders(responseHeaders) {
   return headers;
 }
 
-// HTML書き換え
+// HTML書き換え（完全版）
 function rewriteHtml(html, targetUrl) {
   try {
-    const baseUrl = new URL(targetUrl).origin;
-    const baseTag = `<base href="${baseUrl}/">`;
+    const parsedUrl = new URL(targetUrl);
+    const baseUrl = parsedUrl.origin;
+    const proxyBase = '/proxy/';
     
-    // <head>に<base>タグ注入
-    if (html.includes('<head>')) {
-      html = html.replace(/<head>/i, `<head>${baseTag}`);
-    } else if (html.includes('<html>')) {
-      html = html.replace(/<html>/i, `<html><head>${baseTag}</head>`);
-    } else {
-      html = `<!DOCTYPE html><html><head>${baseTag}</head><body>${html}</body></html>`;
-    }
+    // <base>タグは使わない（問題の原因）
+    // 代わりにすべてのリンクを書き換え
     
-    // 制限メタタグ削除
+    // 1. 絶対パスのリンクをプロキシURL経由に書き換え
+    html = html.replace(/(href|src)=["'](\/[^"']*)["']/gi, (match, attr, path) => {
+      // スクリプトやスタイルシートは元のパスを保持
+      if (attr === 'src' && (match.includes('.js') || match.includes('.css'))) {
+        const fullUrl = baseUrl + path;
+        return `${attr}="${fullUrl}"`;
+      }
+      const fullUrl = baseUrl + path;
+      const encoded = Buffer.from(fullUrl).toString('base64');
+      return `${attr}="${proxyBase}${encoded}"`;
+    });
+    
+    // 2. 相対パスのリンクを絶対パスに変換してプロキシ経由に
+    html = html.replace(/(href|src)=["'](?!http|\/\/|data:|javascript:|mailto:|tel:|#|\/proxy\/)([^"']+)["']/gi, (match, attr, path) => {
+      // スクリプトやスタイルシートは絶対URLに
+      if (attr === 'src' && (match.includes('.js') || match.includes('.css'))) {
+        const fullUrl = new URL(path, targetUrl).href;
+        return `${attr}="${fullUrl}"`;
+      }
+      const fullUrl = new URL(path, targetUrl).href;
+      const encoded = Buffer.from(fullUrl).toString('base64');
+      return `${attr}="${proxyBase}${encoded}"`;
+    });
+    
+    // 3. すでにhttp/httpsで始まるURLを処理
+    html = html.replace(/(href|src)=["'](https?:\/\/[^"']+)["']/gi, (match, attr, url) => {
+      // 外部ドメインのスクリプト/スタイルは元のまま
+      try {
+        const linkUrl = new URL(url);
+        if (attr === 'src' && (url.includes('.js') || url.includes('.css'))) {
+          return match; // 元のまま
+        }
+        // 同一ドメインまたは関連ドメインのみプロキシ経由
+        if (linkUrl.hostname === parsedUrl.hostname || 
+            linkUrl.hostname.endsWith('.' + parsedUrl.hostname) ||
+            parsedUrl.hostname.endsWith('.' + linkUrl.hostname)) {
+          const encoded = Buffer.from(url).toString('base64');
+          return `${attr}="${proxyBase}${encoded}"`;
+        }
+      } catch (e) {}
+      return match; // 外部リンクは元のまま
+    });
+    
+    // 4. <form>のactionも書き換え
+    html = html.replace(/<form([^>]*)\saction=["']([^"']+)["']/gi, (match, attrs, action) => {
+      if (action.startsWith('http://') || action.startsWith('https://')) {
+        const encoded = Buffer.from(action).toString('base64');
+        return `<form${attrs} action="${proxyBase}${encoded}"`;
+      } else if (action.startsWith('/')) {
+        const fullUrl = baseUrl + action;
+        const encoded = Buffer.from(fullUrl).toString('base64');
+        return `<form${attrs} action="${proxyBase}${encoded}"`;
+      } else {
+        const fullUrl = new URL(action, targetUrl).href;
+        const encoded = Buffer.from(fullUrl).toString('base64');
+        return `<form${attrs} action="${proxyBase}${encoded}"`;
+      }
+    });
+    
+    // 5. 制限メタタグ削除
     html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
     html = html.replace(/<meta[^>]*http-equiv=["']X-Frame-Options["'][^>]*>/gi, '');
     html = html.replace(/<meta[^>]*name=["']referrer["'][^>]*>/gi, '');
     
-    // SNS特化対応
+    // 6. <head>タグに必要なメタタグ注入
+    const metaTags = `
+      <meta name="referrer" content="no-referrer">
+      <meta http-equiv="X-Frame-Options" content="ALLOWALL">
+      <base href="${baseUrl}/" target="_self">
+    `;
+    
+    if (html.includes('<head>')) {
+      html = html.replace(/<head>/i, `<head>${metaTags}`);
+    } else if (html.includes('<html>')) {
+      html = html.replace(/<html>/i, `<html><head>${metaTags}</head>`);
+    } else {
+      html = `<!DOCTYPE html><html><head>${metaTags}</head><body>${html}</body></html>`;
+    }
+    
+    // 7. SNS特化対応
     const socialDomains = [
       'youtube.com', 'youtu.be', 
       'tiktok.com', 
@@ -165,9 +234,8 @@ function rewriteHtml(html, targetUrl) {
     
     if (socialDomains.some(domain => targetUrl.includes(domain))) {
       html = html.replace(/<\/head>/i, `
-        <meta name="referrer" content="no-referrer">
-        <meta http-equiv="X-Frame-Options" content="ALLOWALL">
         <meta http-equiv="Content-Security-Policy" content="frame-ancestors *">
+        <style>body{overflow:auto!important}</style>
       </head>`);
     }
     
@@ -178,18 +246,29 @@ function rewriteHtml(html, targetUrl) {
   }
 }
 
-// CSS書き換え
+// CSS書き換え（完全版）
 function rewriteCss(css, targetUrl) {
   try {
-    const baseUrl = new URL(targetUrl).origin;
+    const parsedUrl = new URL(targetUrl);
+    const baseUrl = parsedUrl.origin;
+    const proxyBase = '/proxy/';
     
-    // url()内のパス解決
-    css = css.replace(/url\(["']?(?!http|\/\/|data:|#)([^)"']+)["']?\)/gi, (match, url) => {
-      if (url.startsWith('/')) {
-        return `url("${baseUrl}${url}")`;
+    // url()内のパスをプロキシ経由に書き換え
+    css = css.replace(/url\(["']?(?!http|\/\/|data:|#)([^)"']+)["']?\)/gi, (match, path) => {
+      let fullUrl;
+      if (path.startsWith('/')) {
+        fullUrl = baseUrl + path;
       } else {
-        return `url("${baseUrl}/${url}")`;
+        fullUrl = new URL(path, targetUrl).href;
       }
+      const encoded = Buffer.from(fullUrl).toString('base64');
+      return `url("${proxyBase}${encoded}")`;
+    });
+    
+    // すでにhttp/httpsのURLもプロキシ経由に
+    css = css.replace(/url\(["']?(https?:\/\/[^)"']+)["']?\)/gi, (match, url) => {
+      const encoded = Buffer.from(url).toString('base64');
+      return `url("${proxyBase}${encoded}")`;
     });
     
     return css;
