@@ -142,8 +142,8 @@ function rewriteHtml(html, targetUrl) {
     const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1);
     const proxyBase = '/proxy/';
     
-    // 1. <base>タグで基本パスを設定（重要！）
-    const baseTag = `<base href="${baseUrl}${basePath}" target="_top">`;
+    // 1. <base>タグで基本パスを設定（target削除！）
+    const baseTag = `<base href="${baseUrl}${basePath}">`;
     
     if (html.includes('<head>')) {
       html = html.replace(/<head>/i, `<head>${baseTag}`);
