@@ -328,9 +328,165 @@ function rewriteCss(css, targetUrl) {
 }
 
 // ================================
-// プロキシエンドポイント（完璧超マックス版）
+// プロキシエンドポイント（完璧超マックス版 v2）
 // ================================
-app.all('/proxy/:url', async (req, res) => {
+app.all('/proxy/:url(*)', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const base64Url = req.params.url;
+    console.log('\n🌐 プロキシリクエスト:', base64Url.substring(0, 50) + '...');
+    
+    // Base64デコード
+    let targetUrl;
+    try {
+      targetUrl = decodeURIComponent(escape(Buffer.from(base64Url, 'base64').toString('binary')));
+      console.log('📍 ターゲットURL:', targetUrl);
+    } catch (error) {
+      console.error('❌ Base64デコードエラー:', error.message);
+      return res.status(400).json({ 
+        error: 'Invalid URL encoding',
+        message: 'URLのデコードに失敗しました'
+      });
+    }
+    
+    // URLバリデーション
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      targetUrl = 'https://' + targetUrl;
+    }
+    
+    if (!validateUrl(targetUrl)) {
+      console.error('❌ 無効なURL:', targetUrl);
+      return res.status(400).json({ 
+        error: 'Invalid URL',
+        message: '無効なURLです'
+      });
+    }
+    
+    // フェッチ（完全なブラウザ模倣）
+    console.log('⏳ フェッチ中...');
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': req.headers['sec-fetch-dest'] || 'document',
+        'Sec-Fetch-Mode': req.headers['sec-fetch-mode'] || 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Cache-Control': 'max-age=0',
+        'DNT': '1'
+      },
+      redirect: 'follow',
+      timeout: CONFIG.timeout
+    });
+    
+    const duration = Date.now() - startTime;
+    console.log(`✅ レスポンス: ${response.status} (${duration}ms)`);
+    
+    // エラーステータス処理
+    if (!response.ok) {
+      console.error(`❌ HTTPエラー: ${response.status} ${response.statusText}`);
+    }
+    
+    const contentType = response.headers.get('content-type') || '';
+    console.log('📄 Content-Type:', contentType);
+    
+    // レスポンスヘッダー処理（制限ヘッダー完全削除）
+    const headers = {};
+    response.headers.forEach((value, key) => {
+      const lower = key.toLowerCase();
+      if (!BLOCKED_HEADERS.includes(lower)) {
+        headers[key] = value;
+      }
+    });
+    
+    // CORS完全許可（すべてのリソースに適用）
+    headers['Access-Control-Allow-Origin'] = '*';
+    headers['Access-Control-Allow-Methods'] = '*';
+    headers['Access-Control-Allow-Headers'] = '*';
+    headers['Access-Control-Allow-Credentials'] = 'true';
+    headers['Access-Control-Expose-Headers'] = '*';
+    
+    // iframe許可ヘッダー強制設定
+    delete headers['X-Frame-Options'];
+    delete headers['Content-Security-Policy'];
+    delete headers['Content-Security-Policy-Report-Only'];
+    
+    headers['X-Frame-Options'] = 'ALLOWALL';
+    headers['Content-Security-Policy'] = "frame-ancestors *; default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;";
+    
+    // Content-Type別処理
+    
+    // 1. HTML
+    if (contentType.includes('text/html')) {
+      let html = await response.text();
+      html = rewriteHtml(html, targetUrl);
+      
+      console.log('📝 HTML処理完了');
+      Object.keys(headers).forEach(key => res.setHeader(key, headers[key]));
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
+    }
+    
+    // 2. CSS
+    if (contentType.includes('text/css')) {
+      let css = await response.text();
+      css = rewriteCss(css, targetUrl);
+      
+      console.log('🎨 CSS処理完了');
+      Object.keys(headers).forEach(key => res.setHeader(key, headers[key]));
+      res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      return res.send(css);
+    }
+    
+    // 3. JavaScript/JSON
+    if (contentType.includes('javascript') || contentType.includes('json')) {
+      const text = await response.text();
+      
+      console.log('⚡ JS/JSON処理完了');
+      Object.keys(headers).forEach(key => res.setHeader(key, headers[key]));
+      return res.send(text);
+    }
+    
+    // 4. 画像/動画/フォント等のバイナリ
+    const buffer = await response.buffer();
+    console.log(`📦 バイナリ処理完了 (${buffer.length} bytes)`);
+    Object.keys(headers).forEach(key => res.setHeader(key, headers[key]));
+    res.send(buffer);
+    
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`❌ プロキシエラー (${duration}ms):`, error.message);
+    
+    // エラー詳細
+    if (error.code === 'ENOTFOUND') {
+      return res.status(404).json({
+        error: 'DNS Resolution Failed',
+        message: 'サイトが見つかりません',
+        details: error.message
+      });
+    }
+    
+    if (error.code === 'ETIMEDOUT' || error.type === 'request-timeout') {
+      return res.status(504).json({
+        error: 'Gateway Timeout',
+        message: 'サイトへの接続がタイムアウトしました',
+        details: error.message
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Proxy Error',
+      message: 'プロキシエラーが発生しました',
+      details: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
   const startTime = Date.now();
   
   try {
