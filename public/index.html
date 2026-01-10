@@ -232,6 +232,10 @@
       let url = document.getElementById('urlInput').value.trim();
       if (!url) return;
       
+      // URL正規化（www削除）
+      url = url.replace(/^https?:\/\/(www\.)?/, '');
+      
+      // プロトコル追加
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         if (url.includes('.') && !url.includes(' ')) {
           url = 'https://' + url;
@@ -240,9 +244,23 @@
         }
       }
       
-      const b64 = btoa(unescape(encodeURIComponent(url)));
-      const proxyUrl = `/proxy/${b64}`;
+      console.log('🌐 正規化URL:', url);
       
+      // UTF-8対応Base64エンコード
+      let b64;
+      try {
+        b64 = btoa(unescape(encodeURIComponent(url)));
+        console.log('✅ Base64:', b64);
+      } catch (e) {
+        console.error('❌ エンコードエラー:', e);
+        alert('URLのエンコードに失敗しました');
+        return;
+      }
+      
+      const proxyUrl = `/proxy/${b64}`;
+      console.log('🔗 プロキシURL:', proxyUrl);
+      
+      // 新しいウィンドウを開く
       const win = window.open('', '_blank');
       if (!win) {
         alert('ポップアップがブロックされました。ブラウザ設定でポップアップを許可してください。');
