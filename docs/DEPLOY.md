@@ -41,7 +41,7 @@ Name: transparent-proxy
 Environment: Node
 Branch: main
 Build Command: npm install
-Start Command: npm start
+Start Command: node src/server.js
 Plan: Free
 ```
 
