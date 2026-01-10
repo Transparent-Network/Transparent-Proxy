@@ -417,13 +417,49 @@ function rewriteHtml(html, targetUrl) {
       Object.defineProperty(navigator, 'userAgent', {
         get: function() {
           return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-        }
+        },
+        configurable: true
       });
       
       // webdriver検出を無効化
       Object.defineProperty(navigator, 'webdriver', {
-        get: function() { return false; }
+        get: function() { return false; },
+        configurable: true
       });
+      
+      // plugins/mimeTypesを偽装（Bot検出回避）
+      Object.defineProperty(navigator, 'plugins', {
+        get: function() {
+          return [1, 2, 3, 4, 5];
+        },
+        configurable: true
+      });
+      
+      Object.defineProperty(navigator, 'languages', {
+        get: function() {
+          return ['ja', 'en-US', 'en'];
+        },
+        configurable: true
+      });
+      
+      // Chrome object を追加（YouTube Bot検出回避）
+      window.chrome = {
+        runtime: {},
+        loadTimes: function() {},
+        csi: function() {},
+        app: {}
+      };
+      
+      // permissions API を偽装
+      const originalQuery = window.navigator.permissions?.query;
+      if (originalQuery) {
+        window.navigator.permissions.query = function(parameters) {
+          if (parameters.name === 'notifications') {
+            return Promise.resolve({ state: 'denied' });
+          }
+          return originalQuery.call(this, parameters);
+        };
+      }
     })();
     </script>
     `;
@@ -503,7 +539,6 @@ app.all('/proxy/:url(*)', async (req, res) => {
       'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
       'Accept-Language': req.headers['accept-language'] || 'ja,en-US;q=0.9,en;q=0.8',
-      'Accept-Encoding': req.headers['accept-encoding'] || 'gzip, deflate, br',
       'Connection': 'keep-alive',
       'Upgrade-Insecure-Requests': '1',
       'Sec-Fetch-Dest': req.headers['sec-fetch-dest'] || 'document',
@@ -517,13 +552,21 @@ app.all('/proxy/:url(*)', async (req, res) => {
       'DNT': '1'
     };
     
-    // YouTube特化: Cookieとリファラーを追加
+    // YouTube特化: 実際のブラウザのCookieを模倣
     const parsedTarget = new URL(targetUrl);
     if (parsedTarget.hostname.includes('youtube.com') || parsedTarget.hostname.includes('youtu.be')) {
       requestHeaders['Referer'] = 'https://www.youtube.com/';
       requestHeaders['Origin'] = 'https://www.youtube.com';
-      // YouTube同意Cookie（ボット検証回避）
-      requestHeaders['Cookie'] = 'CONSENT=YES+cb.20210328-17-p0.en+FX+629; PREF=f6=40000000&tz=Asia.Tokyo';
+      // 実際のYouTube Cookieを模倣（重要！）
+      requestHeaders['Cookie'] = 'CONSENT=PENDING+987; SOCS=CAESHAgBEhJnd3NfMjAyNDAxMTAtMF9SQzIaAmVuIAEaBgiAo--mBg; PREF=f6=40000000&tz=Asia.Tokyo&f5=30000&f7=100';
+    }
+    
+    // TikTok特化
+    if (parsedTarget.hostname.includes('tiktok.com')) {
+      requestHeaders['Referer'] = 'https://www.tiktok.com/';
+      requestHeaders['Origin'] = 'https://www.tiktok.com';
+      // TikTokのセッションCookie
+      requestHeaders['Cookie'] = 'tt_csrf_token=1234567890; tt_chain_token=1234567890; s_v_web_id=verify_' + Date.now();
     }
     
     // リファラーがある場合は元のサイトを設定
