@@ -256,7 +256,7 @@ function rewriteHtml(html, targetUrl) {
       html = `<!DOCTYPE html><html><head>${metaTags}</head><body>${html}</body></html>`;
     }
     
-    // 8. JavaScriptインジェクション（Utopia方式）
+    // 8. JavaScriptインジェクション（Utopia方式 + YouTube対応）
     const proxyScript = `
     <script>
     (function() {
@@ -266,9 +266,16 @@ function rewriteHtml(html, targetUrl) {
       const proxyBase = '${proxyBase}';
       const baseUrl = '${baseUrl}';
       
+      // ServiceWorker を無効化（YouTube等の検証回避）
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          registrations.forEach(reg => reg.unregister());
+        });
+      }
+      
       // fetch() をフック
       const originalFetch = window.fetch;
-      window.fetch = function(url, options) {
+      window.fetch = function(url, options = {}) {
         if (typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')) {
           try {
             let fullUrl;
@@ -283,6 +290,12 @@ function rewriteHtml(html, targetUrl) {
             }
             const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
             url = proxyBase + encoded;
+            
+            // Refererヘッダーを追加
+            if (!options.headers) options.headers = {};
+            if (typeof options.headers === 'object' && !Array.isArray(options.headers)) {
+              options.headers['X-Proxy-Referer'] = window.location.href;
+            }
           } catch (e) {}
         }
         return originalFetch.call(this, url, options);
@@ -293,6 +306,7 @@ function rewriteHtml(html, targetUrl) {
       window.XMLHttpRequest = function() {
         const xhr = new OriginalXHR();
         const originalOpen = xhr.open;
+        const originalSetRequestHeader = xhr.setRequestHeader;
         
         xhr.open = function(method, url, ...args) {
           if (typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')) {
@@ -311,7 +325,14 @@ function rewriteHtml(html, targetUrl) {
               url = proxyBase + encoded;
             } catch (e) {}
           }
-          return originalOpen.call(this, method, url, ...args);
+          const result = originalOpen.call(this, method, url, ...args);
+          
+          // Refererヘッダーを追加
+          try {
+            originalSetRequestHeader.call(this, 'X-Proxy-Referer', window.location.href);
+          } catch (e) {}
+          
+          return result;
         };
         
         return xhr;
@@ -405,6 +426,18 @@ function rewriteHtml(html, targetUrl) {
         }
         return originalReplaceState.call(this, state, title, url);
       };
+      
+      // navigator.userAgent を上書き（YouTube検証回避）
+      Object.defineProperty(navigator, 'userAgent', {
+        get: function() {
+          return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+        }
+      });
+      
+      // webdriver検出を無効化
+      Object.defineProperty(navigator, 'webdriver', {
+        get: function() { return false; }
+      });
     })();
     </script>
     `;
@@ -478,17 +511,52 @@ app.all('/proxy/:url(*)', async (req, res) => {
     }
     
     console.log('⏳ フェッチ中...');
+    
+    // リクエストヘッダーを元のリクエストから継承
+    const requestHeaders = {
+      'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+      'Accept-Language': req.headers['accept-language'] || 'ja,en-US;q=0.9,en;q=0.8',
+      'Accept-Encoding': req.headers['accept-encoding'] || 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1',
+      'Sec-Fetch-Dest': req.headers['sec-fetch-dest'] || 'document',
+      'Sec-Fetch-Mode': req.headers['sec-fetch-mode'] || 'navigate',
+      'Sec-Fetch-Site': req.headers['sec-fetch-site'] || 'none',
+      'Sec-Fetch-User': '?1',
+      'Sec-Ch-Ua': req.headers['sec-ch-ua'] || '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+      'Sec-Ch-Ua-Mobile': req.headers['sec-ch-ua-mobile'] || '?0',
+      'Sec-Ch-Ua-Platform': req.headers['sec-ch-ua-platform'] || '"Windows"',
+      'Cache-Control': 'max-age=0',
+      'DNT': '1'
+    };
+    
+    // YouTube特化: Cookieとリファラーを追加
+    const parsedTarget = new URL(targetUrl);
+    if (parsedTarget.hostname.includes('youtube.com') || parsedTarget.hostname.includes('youtu.be')) {
+      requestHeaders['Referer'] = 'https://www.youtube.com/';
+      requestHeaders['Origin'] = 'https://www.youtube.com';
+      // YouTube同意Cookie（ボット検証回避）
+      requestHeaders['Cookie'] = 'CONSENT=YES+cb.20210328-17-p0.en+FX+629; PREF=f6=40000000&tz=Asia.Tokyo';
+    }
+    
+    // リファラーがある場合は元のサイトを設定
+    if (req.headers['referer']) {
+      try {
+        const refererBase64 = req.headers['referer'].split('/proxy/')[1];
+        if (refererBase64) {
+          const refererUrl = decodeURIComponent(escape(Buffer.from(refererBase64.split('?')[0], 'base64').toString('binary')));
+          requestHeaders['Referer'] = refererUrl;
+        }
+      } catch (e) {}
+    }
+    
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
-        'Connection': 'keep-alive',
-        'Cache-Control': 'max-age=0'
-      },
+      headers: requestHeaders,
       redirect: 'follow',
-      timeout: CONFIG.timeout
+      timeout: CONFIG.timeout,
+      compress: false // gzip等は手動で処理
     });
     
     const duration = Date.now() - startTime;
