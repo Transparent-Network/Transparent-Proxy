@@ -122,63 +122,105 @@ function validateUrl(url) {
   }
 }
 
-// HTML書き換え（完全版 v2）
+// HTML書き換え（Utopia/Wakame方式 - 完全版）
 function rewriteHtml(html, targetUrl) {
   try {
     const parsedUrl = new URL(targetUrl);
     const baseUrl = parsedUrl.origin;
-    const basePath = parsedUrl.pathname.substring(0, parsedUrl.pathname.lastIndexOf('/') + 1);
     const proxyBase = '/proxy/';
     
-    // 1. <base>タグで基本パスを設定
-    const baseTag = `<base href="${baseUrl}${basePath}">`;
-    
-    if (html.includes('<head>')) {
-      html = html.replace(/<head>/i, `<head>${baseTag}`);
-    } else if (html.includes('<html>')) {
-      html = html.replace(/<html>/i, `<html><head>${baseTag}</head>`);
-    } else {
-      html = `<!DOCTYPE html><html><head>${baseTag}</head><body>${html}</body></html>`;
-    }
-    
-    // 2. ナビゲーションリンク（<a>タグ）のみプロキシ経由に書き換え
-    html = html.replace(/<a\s+([^>]*?)href=["']([^"']+)["']([^>]*?)>/gi, (match, before, href, after) => {
-      if (href.startsWith('javascript:') || href.startsWith('mailto:') || 
-          href.startsWith('tel:') || href.startsWith('#')) {
+    // 1. すべてのリンク（href）をプロキシ経由に
+    html = html.replace(/(href)=["']([^"']+)["']/gi, (match, attr, url) => {
+      // 特殊URLはスキップ
+      if (url.startsWith('javascript:') || url.startsWith('mailto:') || 
+          url.startsWith('tel:') || url.startsWith('#') || url.startsWith('data:')) {
         return match;
       }
       
-      if (href.startsWith('/proxy/')) {
+      // すでにプロキシURLならスキップ
+      if (url.startsWith('/proxy/')) {
         return match;
       }
       
-      let fullUrl;
       try {
-        if (href.startsWith('http://') || href.startsWith('https://')) {
-          fullUrl = href;
-        } else if (href.startsWith('//')) {
-          fullUrl = parsedUrl.protocol + href;
-        } else if (href.startsWith('/')) {
-          fullUrl = baseUrl + href;
+        let fullUrl;
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          fullUrl = url;
+        } else if (url.startsWith('//')) {
+          fullUrl = parsedUrl.protocol + url;
+        } else if (url.startsWith('/')) {
+          fullUrl = baseUrl + url;
         } else {
-          fullUrl = new URL(href, targetUrl).href;
+          fullUrl = new URL(url, targetUrl).href;
         }
         
         const encoded = Buffer.from(fullUrl).toString('base64');
-        return `<a ${before}href="${proxyBase}${encoded}"${after}>`;
+        return `${attr}="${proxyBase}${encoded}"`;
       } catch (e) {
         return match;
       }
     });
     
-    // 3. <form>のactionもプロキシ経由に
-    html = html.replace(/<form\s+([^>]*?)action=["']([^"']+)["']([^>]*?)>/gi, (match, before, action, after) => {
+    // 2. すべてのリソース（src）もプロキシ経由に
+    html = html.replace(/(src)=["']([^"']+)["']/gi, (match, attr, url) => {
+      // 特殊URLはスキップ
+      if (url.startsWith('javascript:') || url.startsWith('data:') || url.startsWith('blob:')) {
+        return match;
+      }
+      
+      // すでにプロキシURLならスキップ
+      if (url.startsWith('/proxy/')) {
+        return match;
+      }
+      
+      try {
+        let fullUrl;
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          fullUrl = url;
+        } else if (url.startsWith('//')) {
+          fullUrl = parsedUrl.protocol + url;
+        } else if (url.startsWith('/')) {
+          fullUrl = baseUrl + url;
+        } else {
+          fullUrl = new URL(url, targetUrl).href;
+        }
+        
+        const encoded = Buffer.from(fullUrl).toString('base64');
+        return `${attr}="${proxyBase}${encoded}"`;
+      } catch (e) {
+        return match;
+      }
+    });
+    
+    // 3. srcset属性も書き換え（レスポンシブ画像対応）
+    html = html.replace(/srcset=["']([^"']+)["']/gi, (match, srcset) => {
+      const rewritten = srcset.split(',').map(item => {
+        const parts = item.trim().split(/\s+/);
+        const url = parts[0];
+        
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          const encoded = Buffer.from(url).toString('base64');
+          parts[0] = `${proxyBase}${encoded}`;
+        } else if (url.startsWith('/')) {
+          const fullUrl = baseUrl + url;
+          const encoded = Buffer.from(fullUrl).toString('base64');
+          parts[0] = `${proxyBase}${encoded}`;
+        }
+        
+        return parts.join(' ');
+      }).join(', ');
+      
+      return `srcset="${rewritten}"`;
+    });
+    
+    // 4. <form>のaction
+    html = html.replace(/<form([^>]*?)action=["']([^"']+)["']/gi, (match, before, action) => {
       if (action.startsWith('javascript:') || action.startsWith('#')) {
         return match;
       }
       
-      let fullUrl;
       try {
+        let fullUrl;
         if (action.startsWith('http://') || action.startsWith('https://')) {
           fullUrl = action;
         } else if (action.startsWith('/')) {
@@ -188,61 +230,177 @@ function rewriteHtml(html, targetUrl) {
         }
         
         const encoded = Buffer.from(fullUrl).toString('base64');
-        return `<form ${before}action="${proxyBase}${encoded}"${after}>`;
+        return `<form${before}action="${proxyBase}${encoded}"`;
       } catch (e) {
         return match;
       }
     });
     
-    // 4. 制限メタタグ削除
+    // 5. <base>タグを削除（プロキシの邪魔になる）
+    html = html.replace(/<base[^>]*>/gi, '');
+    
+    // 6. 制限メタタグ削除
     html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
     html = html.replace(/<meta[^>]*http-equiv=["']X-Frame-Options["'][^>]*>/gi, '');
     html = html.replace(/<meta[^>]*name=["']referrer["'][^>]*>/gi, '');
-    html = html.replace(/<meta[^>]*property=["']csp-nonce["'][^>]*>/gi, '');
     
-    // 5. 必須メタタグ追加
-    const metaTags = `<meta name="referrer" content="no-referrer">`;
-    html = html.replace(/<\/head>/i, `${metaTags}</head>`);
+    // 7. 必須メタタグ追加
+    const metaTags = `
+      <meta name="referrer" content="no-referrer">
+      <meta charset="UTF-8">
+    `;
     
-    // 6. JavaScriptでのナビゲーション対策
+    if (html.includes('<head>')) {
+      html = html.replace(/<head>/i, `<head>${metaTags}`);
+    } else {
+      html = `<!DOCTYPE html><html><head>${metaTags}</head><body>${html}</body></html>`;
+    }
+    
+    // 8. JavaScriptインジェクション（Utopia方式）
     const proxyScript = `
     <script>
     (function() {
-      if (window.top === window.self) return;
+      if (window.__PROXY_INJECTED__) return;
+      window.__PROXY_INJECTED__ = true;
       
       const proxyBase = '${proxyBase}';
-      const originalOpen = window.open;
-      const originalPushState = history.pushState;
-      const originalReplaceState = history.replaceState;
+      const baseUrl = '${baseUrl}';
       
-      window.open = function(url, target, features) {
-        if (url && !url.startsWith('javascript:') && !url.startsWith('about:') && !url.startsWith('data:')) {
+      // fetch() をフック
+      const originalFetch = window.fetch;
+      window.fetch = function(url, options) {
+        if (typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')) {
           try {
-            const fullUrl = new URL(url, window.location.href).href;
+            let fullUrl;
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+              fullUrl = url;
+            } else if (url.startsWith('//')) {
+              fullUrl = location.protocol + url;
+            } else if (url.startsWith('/')) {
+              fullUrl = baseUrl + url;
+            } else {
+              fullUrl = new URL(url, baseUrl).href;
+            }
             const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
-            return originalOpen.call(this, proxyBase + encoded, target, features);
+            url = proxyBase + encoded;
+          } catch (e) {}
+        }
+        return originalFetch.call(this, url, options);
+      };
+      
+      // XMLHttpRequest をフック
+      const OriginalXHR = window.XMLHttpRequest;
+      window.XMLHttpRequest = function() {
+        const xhr = new OriginalXHR();
+        const originalOpen = xhr.open;
+        
+        xhr.open = function(method, url, ...args) {
+          if (typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')) {
+            try {
+              let fullUrl;
+              if (url.startsWith('http://') || url.startsWith('https://')) {
+                fullUrl = url;
+              } else if (url.startsWith('//')) {
+                fullUrl = location.protocol + url;
+              } else if (url.startsWith('/')) {
+                fullUrl = baseUrl + url;
+              } else {
+                fullUrl = new URL(url, baseUrl).href;
+              }
+              const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
+              url = proxyBase + encoded;
+            } catch (e) {}
+          }
+          return originalOpen.call(this, method, url, ...args);
+        };
+        
+        return xhr;
+      };
+      
+      // window.open をフック
+      const originalOpen = window.open;
+      window.open = function(url, target, features) {
+        if (url && typeof url === 'string' && !url.startsWith('javascript:') && !url.startsWith('about:') && !url.startsWith('data:')) {
+          try {
+            let fullUrl;
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+              fullUrl = url;
+            } else if (url.startsWith('//')) {
+              fullUrl = location.protocol + url;
+            } else if (url.startsWith('/')) {
+              fullUrl = baseUrl + url;
+            } else {
+              fullUrl = new URL(url, baseUrl).href;
+            }
+            const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
+            url = proxyBase + encoded;
           } catch (e) {}
         }
         return originalOpen.call(this, url, target, features);
       };
       
+      // location.href セッター をフック
+      const originalLocationSetter = Object.getOwnPropertyDescriptor(Location.prototype, 'href').set;
+      Object.defineProperty(Location.prototype, 'href', {
+        set: function(url) {
+          if (url && typeof url === 'string' && !url.startsWith('javascript:') && !url.startsWith('about:')) {
+            try {
+              let fullUrl;
+              if (url.startsWith('http://') || url.startsWith('https://')) {
+                fullUrl = url;
+              } else if (url.startsWith('//')) {
+                fullUrl = location.protocol + url;
+              } else if (url.startsWith('/')) {
+                fullUrl = baseUrl + url;
+              } else {
+                fullUrl = new URL(url, baseUrl).href;
+              }
+              const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
+              url = proxyBase + encoded;
+            } catch (e) {}
+          }
+          return originalLocationSetter.call(this, url);
+        },
+        get: function() {
+          return Object.getOwnPropertyDescriptor(Location.prototype, 'href').get.call(this);
+        }
+      });
+      
+      // history API をフック
+      const originalPushState = history.pushState;
+      const originalReplaceState = history.replaceState;
+      
       history.pushState = function(state, title, url) {
-        if (url && !url.startsWith(proxyBase)) {
+        if (url && typeof url === 'string' && !url.startsWith(proxyBase)) {
           try {
-            const fullUrl = new URL(url, window.location.href).href;
+            let fullUrl;
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+              fullUrl = url;
+            } else if (url.startsWith('/')) {
+              fullUrl = baseUrl + url;
+            } else {
+              fullUrl = new URL(url, baseUrl).href;
+            }
             const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
-            return originalPushState.call(this, state, title, proxyBase + encoded);
+            url = proxyBase + encoded;
           } catch (e) {}
         }
         return originalPushState.call(this, state, title, url);
       };
       
       history.replaceState = function(state, title, url) {
-        if (url && !url.startsWith(proxyBase)) {
+        if (url && typeof url === 'string' && !url.startsWith(proxyBase)) {
           try {
-            const fullUrl = new URL(url, window.location.href).href;
+            let fullUrl;
+            if (url.startsWith('http://') || url.startsWith('https://')) {
+              fullUrl = url;
+            } else if (url.startsWith('/')) {
+              fullUrl = baseUrl + url;
+            } else {
+              fullUrl = new URL(url, baseUrl).href;
+            }
             const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
-            return originalReplaceState.call(this, state, title, proxyBase + encoded);
+            url = proxyBase + encoded;
           } catch (e) {}
         }
         return originalReplaceState.call(this, state, title, url);
@@ -250,7 +408,9 @@ function rewriteHtml(html, targetUrl) {
     })();
     </script>
     `;
-    html = html.replace(/<\/body>/i, `${proxyScript}</body>`);
+    
+    // <head>の最後に注入（できるだけ早く実行）
+    html = html.replace(/<\/head>/i, `${proxyScript}</head>`);
     
     return html;
   } catch (error) {
