@@ -290,12 +290,6 @@ function rewriteHtml(html, targetUrl) {
             }
             const encoded = btoa(unescape(encodeURIComponent(fullUrl)));
             url = proxyBase + encoded;
-            
-            // Refererヘッダーを追加
-            if (!options.headers) options.headers = {};
-            if (typeof options.headers === 'object' && !Array.isArray(options.headers)) {
-              options.headers['X-Proxy-Referer'] = window.location.href;
-            }
           } catch (e) {}
         }
         return originalFetch.call(this, url, options);
@@ -306,7 +300,6 @@ function rewriteHtml(html, targetUrl) {
       window.XMLHttpRequest = function() {
         const xhr = new OriginalXHR();
         const originalOpen = xhr.open;
-        const originalSetRequestHeader = xhr.setRequestHeader;
         
         xhr.open = function(method, url, ...args) {
           if (typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')) {
@@ -325,14 +318,7 @@ function rewriteHtml(html, targetUrl) {
               url = proxyBase + encoded;
             } catch (e) {}
           }
-          const result = originalOpen.call(this, method, url, ...args);
-          
-          // Refererヘッダーを追加
-          try {
-            originalSetRequestHeader.call(this, 'X-Proxy-Referer', window.location.href);
-          } catch (e) {}
-          
-          return result;
+          return originalOpen.call(this, method, url, ...args);
         };
         
         return xhr;
@@ -555,8 +541,8 @@ app.all('/proxy/:url(*)', async (req, res) => {
       method: req.method,
       headers: requestHeaders,
       redirect: 'follow',
-      timeout: CONFIG.timeout,
-      compress: false // gzip等は手動で処理
+      timeout: CONFIG.timeout
+      // compress: false を削除（自動デコードさせる）
     });
     
     const duration = Date.now() - startTime;
