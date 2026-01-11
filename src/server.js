@@ -256,7 +256,39 @@ function rewriteHtml(html, targetUrl) {
       html = `<!DOCTYPE html><html><head>${metaTags}</head><body>${html}</body></html>`;
     }
     
-    // 8. JavaScriptインジェクション（Utopia方式 + YouTube対応）
+    // 7.5. YouTube/TikTok用Cookieをブラウザに注入（重要！）
+    const parsedUrl = new URL(targetUrl);
+    let cookieScript = '';
+    
+    if (parsedUrl.hostname.includes('youtube.com') || parsedUrl.hostname.includes('youtu.be')) {
+      cookieScript = `
+      <script>
+      // YouTube Cookieを設定（Bot検証回避）
+      document.cookie = "CONSENT=PENDING+987; path=/; domain=.youtube.com; SameSite=None; Secure";
+      document.cookie = "SOCS=CAESHAgBEhJnd3NfMjAyNDAxMTAtMF9SQzIaAmVuIAEaBgiAo--mBg; path=/; domain=.youtube.com; SameSite=None; Secure";
+      document.cookie = "PREF=f6=40000000&tz=Asia.Tokyo&f5=30000&f7=100; path=/; domain=.youtube.com";
+      document.cookie = "VISITOR_INFO1_LIVE=; path=/; domain=.youtube.com";
+      document.cookie = "YSC=; path=/; domain=.youtube.com";
+      </script>
+      `;
+    }
+    
+    if (parsedUrl.hostname.includes('tiktok.com')) {
+      cookieScript = `
+      <script>
+      // TikTok Cookieを設定
+      document.cookie = "tt_csrf_token=${Date.now()}; path=/; domain=.tiktok.com";
+      document.cookie = "tt_chain_token=${Date.now()}; path=/; domain=.tiktok.com";
+      document.cookie = "s_v_web_id=verify_${Date.now()}; path=/; domain=.tiktok.com";
+      </script>
+      `;
+    }
+    
+    if (cookieScript) {
+      html = html.replace(/<\/head>/i, `${cookieScript}</head>`);
+    }
+    
+    // 8. JavaScriptインジェクション（完全版 - Bot検証回避強化）
     const proxyScript = `
     <script>
     (function() {
@@ -266,12 +298,99 @@ function rewriteHtml(html, targetUrl) {
       const proxyBase = '${proxyBase}';
       const baseUrl = '${baseUrl}';
       
-      // ServiceWorker を無効化（YouTube等の検証回避）
+      // =================================
+      // Bot検出回避（最優先で実行）
+      // =================================
+      
+      // 1. ServiceWorker を完全無効化
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(registrations => {
-          registrations.forEach(reg => reg.unregister());
+        delete navigator.serviceWorker;
+      }
+      
+      // 2. navigator.webdriver を削除
+      Object.defineProperty(navigator, 'webdriver', {
+        get: () => undefined
+      });
+      
+      // 3. navigator.plugins を実際のブラウザに偽装
+      Object.defineProperty(navigator, 'plugins', {
+        get: () => {
+          return {
+            length: 5,
+            0: { name: 'Chrome PDF Plugin' },
+            1: { name: 'Chrome PDF Viewer' },
+            2: { name: 'Native Client' },
+            3: { name: 'Chromium PDF Plugin' },
+            4: { name: 'Chromium PDF Viewer' }
+          };
+        }
+      });
+      
+      // 4. navigator.mimeTypes を偽装
+      Object.defineProperty(navigator, 'mimeTypes', {
+        get: () => {
+          return {
+            length: 4,
+            0: { type: 'application/pdf' },
+            1: { type: 'text/pdf' }
+          };
+        }
+      });
+      
+      // 5. window.chrome を追加
+      if (!window.chrome) {
+        window.chrome = {
+          runtime: {},
+          loadTimes: function() {},
+          csi: function() {},
+          app: {
+            isInstalled: false,
+            InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+            RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' }
+          }
+        };
+      }
+      
+      // 6. permissions API を偽装
+      if (navigator.permissions && navigator.permissions.query) {
+        const originalQuery = navigator.permissions.query;
+        navigator.permissions.query = function(parameters) {
+          return parameters.name === 'notifications'
+            ? Promise.resolve({ state: Notification.permission })
+            : originalQuery.call(this, parameters);
+        };
+      }
+      
+      // 7. languages を設定
+      Object.defineProperty(navigator, 'languages', {
+        get: () => ['ja', 'en-US', 'en']
+      });
+      
+      // 8. platform を設定
+      Object.defineProperty(navigator, 'platform', {
+        get: () => 'Win32'
+      });
+      
+      // 9. hardwareConcurrency を設定
+      Object.defineProperty(navigator, 'hardwareConcurrency', {
+        get: () => 8
+      });
+      
+      // 10. deviceMemory を設定
+      Object.defineProperty(navigator, 'deviceMemory', {
+        get: () => 8
+      });
+      
+      // 11. connection を偽装
+      if (navigator.connection) {
+        Object.defineProperty(navigator.connection, 'rtt', {
+          get: () => 50
         });
       }
+      
+      // =================================
+      // プロキシ機能（fetch/XHR等のフック）
+      // =================================
       
       // fetch() をフック
       const originalFetch = window.fetch;
@@ -413,53 +532,36 @@ function rewriteHtml(html, targetUrl) {
         return originalReplaceState.call(this, state, title, url);
       };
       
-      // navigator.userAgent を上書き（YouTube検証回避）
-      Object.defineProperty(navigator, 'userAgent', {
-        get: function() {
-          return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-        },
-        configurable: true
-      });
+      // =================================
+      // Canvas/WebGL fingerprint 対策
+      // =================================
       
-      // webdriver検出を無効化
-      Object.defineProperty(navigator, 'webdriver', {
-        get: function() { return false; },
-        configurable: true
-      });
-      
-      // plugins/mimeTypesを偽装（Bot検出回避）
-      Object.defineProperty(navigator, 'plugins', {
-        get: function() {
-          return [1, 2, 3, 4, 5];
-        },
-        configurable: true
-      });
-      
-      Object.defineProperty(navigator, 'languages', {
-        get: function() {
-          return ['ja', 'en-US', 'en'];
-        },
-        configurable: true
-      });
-      
-      // Chrome object を追加（YouTube Bot検出回避）
-      window.chrome = {
-        runtime: {},
-        loadTimes: function() {},
-        csi: function() {},
-        app: {}
+      // Canvas fingerprint をランダム化
+      const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+      HTMLCanvasElement.prototype.toDataURL = function(type) {
+        if (type === 'image/png' && this.width === 280 && this.height === 60) {
+          // YouTube Bot検出用Canvasの場合、ランダムノイズを追加
+          const context = this.getContext('2d');
+          const imageData = context.getImageData(0, 0, this.width, this.height);
+          for (let i = 0; i < imageData.data.length; i += 4) {
+            imageData.data[i] += Math.floor(Math.random() * 10) - 5;
+          }
+          context.putImageData(imageData, 0, 0);
+        }
+        return originalToDataURL.apply(this, arguments);
       };
       
-      // permissions API を偽装
-      const originalQuery = window.navigator.permissions?.query;
-      if (originalQuery) {
-        window.navigator.permissions.query = function(parameters) {
-          if (parameters.name === 'notifications') {
-            return Promise.resolve({ state: 'denied' });
-          }
-          return originalQuery.call(this, parameters);
-        };
-      }
+      // WebGL fingerprint をランダム化
+      const getParameter = WebGLRenderingContext.prototype.getParameter;
+      WebGLRenderingContext.prototype.getParameter = function(parameter) {
+        if (parameter === 37445) { // UNMASKED_VENDOR_WEBGL
+          return 'Intel Inc.';
+        }
+        if (parameter === 37446) { // UNMASKED_RENDERER_WEBGL
+          return 'Intel Iris OpenGL Engine';
+        }
+        return getParameter.call(this, parameter);
+      };
     })();
     </script>
     `;
