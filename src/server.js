@@ -302,40 +302,58 @@ function rewriteHtml(html, targetUrl) {
       // Bot検出回避（最優先で実行）
       // =================================
       
-      // 1. ServiceWorker を完全無効化
+      // 1. ServiceWorker を完全無効化（最優先）
       if ('serviceWorker' in navigator) {
-        delete navigator.serviceWorker;
+        // 既存のSWを全削除
+        navigator.serviceWorker.getRegistrations().then(regs => {
+          regs.forEach(reg => reg.unregister());
+        });
+        
+        // SW登録を完全ブロック
+        Object.defineProperty(navigator, 'serviceWorker', {
+          get: () => undefined
+        });
       }
       
       // 2. navigator.webdriver を削除
+      try {
+        delete navigator.__proto__.webdriver;
+      } catch (e) {}
+      
       Object.defineProperty(navigator, 'webdriver', {
         get: () => undefined
       });
       
       // 3. navigator.plugins を実際のブラウザに偽装
-      Object.defineProperty(navigator, 'plugins', {
-        get: () => {
-          return {
-            length: 5,
-            0: { name: 'Chrome PDF Plugin' },
-            1: { name: 'Chrome PDF Viewer' },
-            2: { name: 'Native Client' },
-            3: { name: 'Chromium PDF Plugin' },
-            4: { name: 'Chromium PDF Viewer' }
-          };
-        }
-      });
+      try {
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => {
+            return {
+              length: 5,
+              0: { name: 'Chrome PDF Plugin' },
+              1: { name: 'Chrome PDF Viewer' },
+              2: { name: 'Native Client' },
+              3: { name: 'Chromium PDF Plugin' },
+              4: { name: 'Chromium PDF Viewer' }
+            };
+          }
+        });
+      } catch (e) {
+        // すでに定義されている場合は無視
+      }
       
       // 4. navigator.mimeTypes を偽装
-      Object.defineProperty(navigator, 'mimeTypes', {
-        get: () => {
-          return {
-            length: 4,
-            0: { type: 'application/pdf' },
-            1: { type: 'text/pdf' }
-          };
-        }
-      });
+      try {
+        Object.defineProperty(navigator, 'mimeTypes', {
+          get: () => {
+            return {
+              length: 4,
+              0: { type: 'application/pdf' },
+              1: { type: 'text/pdf' }
+            };
+          }
+        });
+      } catch (e) {}
       
       // 5. window.chrome を追加
       if (!window.chrome) {
