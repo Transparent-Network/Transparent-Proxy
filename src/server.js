@@ -257,10 +257,10 @@ function rewriteHtml(html, targetUrl) {
     }
     
     // 7.5. YouTube/TikTok用Cookieをブラウザに注入（重要！）
-    const parsedUrl = new URL(targetUrl);
+    const parsedUrlForCookie = new URL(targetUrl);
     let cookieScript = '';
     
-    if (parsedUrl.hostname.includes('youtube.com') || parsedUrl.hostname.includes('youtu.be')) {
+    if (parsedUrlForCookie.hostname.includes('youtube.com') || parsedUrlForCookie.hostname.includes('youtu.be')) {
       cookieScript = `
       <script>
       // YouTube Cookieを設定（Bot検証回避）
@@ -273,7 +273,7 @@ function rewriteHtml(html, targetUrl) {
       `;
     }
     
-    if (parsedUrl.hostname.includes('tiktok.com')) {
+    if (parsedUrlForCookie.hostname.includes('tiktok.com')) {
       cookieScript = `
       <script>
       // TikTok Cookieを設定
