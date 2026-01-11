@@ -1,22 +1,21 @@
 // ================================
-// Transparent Proxy v3.0.0 - UV Style
+// Transparent Proxy v3.1.0 ULTIMATE
+// 超究極完全版 - 全エラー撲滅
 // ================================
 
 const express = require('express');
 const fetch = require('node-fetch');
-const { createServer } = require('http');
 const path = require('path');
 const fs = require('fs');
 
 const app = express();
-const server = createServer();
 
 // ================================
 // 設定
 // ================================
 const CONFIG = {
   port: process.env.PORT || 3000,
-  prefix: '/service/',  
+  prefix: '/service/',
 };
 
 // ================================
@@ -29,8 +28,7 @@ app.use(express.static(publicDir));
 // UV方式エンコーディング
 // ================================
 function encodeUrl(url) {
-  // Utopia/UV方式: XOR + Base64
-  const xorKey = 2; // シンプルなXORキー
+  const xorKey = 2;
   const encoded = Buffer.from(url).map(b => b ^ xorKey);
   return encoded.toString('base64')
     .replace(/\+/g, '-')
@@ -39,21 +37,25 @@ function encodeUrl(url) {
 }
 
 function decodeUrl(encoded) {
-  // パディング復元
   const padded = encoded
     .replace(/-/g, '+')
     .replace(/_/g, '/') + '==';
-  
   const xorKey = 2;
   const decoded = Buffer.from(padded, 'base64').map(b => b ^ xorKey);
   return decoded.toString('utf8');
 }
 
 // ================================
-// URLリライター（Utopia方式）
+// URLリライター
 // ================================
 function rewriteUrl(url, baseUrl) {
   try {
+    if (url.startsWith(CONFIG.prefix)) return url;
+    if (url.startsWith('javascript:') || url.startsWith('data:') || 
+        url.startsWith('blob:') || url.startsWith('#')) {
+      return url;
+    }
+    
     let fullUrl;
     if (url.startsWith('http://') || url.startsWith('https://')) {
       fullUrl = url;
@@ -76,17 +78,13 @@ function rewriteUrl(url, baseUrl) {
 function rewriteHtml(html, targetUrl) {
   const baseUrl = new URL(targetUrl).origin;
   
-  // 1. すべてのURL属性を書き換え
+  // 1. すべてのURL属性
   const urlAttrs = ['href', 'src', 'action', 'data', 'poster', 'background'];
-  
   urlAttrs.forEach(attr => {
     const regex = new RegExp(`${attr}=["']([^"']+)["']`, 'gi');
     html = html.replace(regex, (match, url) => {
       if (url.startsWith('javascript:') || url.startsWith('data:') || 
-          url.startsWith('blob:') || url.startsWith('#')) {
-        return match;
-      }
-      if (url.startsWith(CONFIG.prefix)) {
+          url.startsWith('blob:') || url.startsWith('#') || url.startsWith(CONFIG.prefix)) {
         return match;
       }
       return `${attr}="${rewriteUrl(url, baseUrl)}"`;
@@ -97,122 +95,159 @@ function rewriteHtml(html, targetUrl) {
   html = html.replace(/srcset=["']([^"']+)["']/gi, (match, srcset) => {
     const rewritten = srcset.split(',').map(item => {
       const parts = item.trim().split(/\s+/);
-      const url = parts[0];
-      const descriptor = parts[1] || '';
-      return `${rewriteUrl(url, baseUrl)} ${descriptor}`.trim();
+      return `${rewriteUrl(parts[0], baseUrl)} ${parts[1] || ''}`.trim();
     }).join(', ');
     return `srcset="${rewritten}"`;
   });
   
-  // 3. style属性内のurl()
-  html = html.replace(/style=["']([^"']*url\([^"']*\)[^"']*)["']/gi, (match, style) => {
-    const rewritten = style.replace(/url\(["']?([^)"']+)["']?\)/gi, (m, url) => {
-      if (url.startsWith('data:')) return m;
-      return `url("${rewriteUrl(url, baseUrl)}")`;
-    });
-    return `style="${rewritten}"`;
-  });
-  
-  // 4. <base>タグ削除
+  // 3. <base>削除
   html = html.replace(/<base[^>]*>/gi, '');
   
-  // 5. メタタグ削除
-  html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
-  html = html.replace(/<meta[^>]*http-equiv=["']X-Frame-Options["'][^>]*>/gi, '');
+  // 4. CSP/X-Frame-Options削除
+  html = html.replace(/<meta[^>]*http-equiv=["'](Content-Security-Policy|X-Frame-Options)["'][^>]*>/gi, '');
   
-  // 6. JavaScriptインジェクション（Utopia方式）
+  // 5. 超究極JavaScriptインジェクション
   const script = `
-<script>
+<script data-proxy-inject>
 (function() {
+  'use strict';
+  
+  if (window.__PROXY_INIT__) return;
+  window.__PROXY_INIT__ = true;
+  
   const PREFIX = '${CONFIG.prefix}';
-  const encodeUrl = ${encodeUrl.toString()};
-  const baseUrl = '${baseUrl}';
+  const BASE = '${baseUrl}';
+  
+  // XORエンコード関数
+  function enc(s) {
+    const x = 2;
+    const buf = [];
+    for (let i = 0; i < s.length; i++) {
+      buf.push(String.fromCharCode(s.charCodeAt(i) ^ x));
+    }
+    return btoa(buf.join('')).replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=/g, '');
+  }
+  
+  // URL正規化
+  function norm(u) {
+    if (!u || typeof u !== 'string') return u;
+    if (u.startsWith('javascript:') || u.startsWith('data:') || u.startsWith('blob:') || u.startsWith('#')) return u;
+    if (u.startsWith(PREFIX)) return u;
+    
+    try {
+      let full;
+      if (u.startsWith('http://') || u.startsWith('https://')) {
+        full = u;
+      } else if (u.startsWith('//')) {
+        full = 'https:' + u;
+      } else if (u.startsWith('/')) {
+        full = BASE + u;
+      } else {
+        full = new URL(u, BASE).href;
+      }
+      return PREFIX + enc(full);
+    } catch (e) {
+      return u;
+    }
+  }
+  
+  // ServiceWorker完全無効化
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(r => r.forEach(x => x.unregister()));
+    Object.defineProperty(navigator, 'serviceWorker', {
+      get: () => undefined,
+      configurable: true
+    });
+  }
   
   // fetch
-  const origFetch = window.fetch;
-  window.fetch = function(url, opts) {
-    if (typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')) {
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        if (url.startsWith('//')) {
-          url = 'https:' + url;
-        } else if (url.startsWith('/')) {
-          url = baseUrl + url;
-        } else {
-          url = new URL(url, baseUrl).href;
-        }
-      }
-      url = PREFIX + encodeUrl(url);
-    }
-    return origFetch.call(this, url, opts);
+  const _fetch = window.fetch;
+  window.fetch = function(u, o) {
+    return _fetch.call(this, norm(u), o);
   };
   
   // XMLHttpRequest
-  const OrigXHR = window.XMLHttpRequest;
+  const _XHR = window.XMLHttpRequest;
   window.XMLHttpRequest = function() {
-    const xhr = new OrigXHR();
-    const origOpen = xhr.open;
-    xhr.open = function(method, url, ...args) {
-      if (typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')) {
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-          if (url.startsWith('//')) {
-            url = 'https:' + url;
-          } else if (url.startsWith('/')) {
-            url = baseUrl + url;
-          } else {
-            url = new URL(url, baseUrl).href;
-          }
-        }
-        url = PREFIX + encodeUrl(url);
-      }
-      return origOpen.call(this, method, url, ...args);
+    const x = new _XHR();
+    const _open = x.open;
+    x.open = function(m, u, ...a) {
+      return _open.call(this, m, norm(u), ...a);
     };
-    return xhr;
+    return x;
   };
   
   // window.open
-  const origOpen = window.open;
-  window.open = function(url, ...args) {
-    if (url && typeof url === 'string' && !url.startsWith('javascript:') && !url.startsWith('about:')) {
-      if (!url.startsWith('http://') && !url.startsWith('https://')) {
-        if (url.startsWith('/')) {
-          url = baseUrl + url;
-        } else {
-          url = new URL(url, baseUrl).href;
-        }
-      }
-      url = PREFIX + encodeUrl(url);
-    }
-    return origOpen.call(this, url, ...args);
+  const _open = window.open;
+  window.open = function(u, ...a) {
+    return _open.call(this, u ? norm(u) : u, ...a);
   };
   
   // location.href
-  const origSetter = Object.getOwnPropertyDescriptor(Location.prototype, 'href').set;
+  const _locSetter = Object.getOwnPropertyDescriptor(Location.prototype, 'href').set;
   Object.defineProperty(Location.prototype, 'href', {
-    set: function(url) {
-      if (url && !url.startsWith('javascript:') && !url.startsWith('about:')) {
-        if (!url.startsWith('http://') && !url.startsWith('https://')) {
-          if (url.startsWith('/')) {
-            url = baseUrl + url;
-          } else {
-            url = new URL(url, baseUrl).href;
-          }
-        }
-        url = PREFIX + encodeUrl(url);
-      }
-      return origSetter.call(this, url);
-    }
+    set: function(u) {
+      return _locSetter.call(this, norm(u));
+    },
+    get: Object.getOwnPropertyDescriptor(Location.prototype, 'href').get
   });
   
-  // ServiceWorker無効化
-  if ('serviceWorker' in navigator) {
-    delete navigator.serviceWorker;
+  // history API
+  const _push = history.pushState;
+  const _replace = history.replaceState;
+  
+  history.pushState = function(s, t, u) {
+    return _push.call(this, s, t, u ? norm(u) : u);
+  };
+  
+  history.replaceState = function(s, t, u) {
+    return _replace.call(this, s, t, u ? norm(u) : u);
+  };
+  
+  // Document.write/writeln
+  const _write = document.write;
+  const _writeln = document.writeln;
+  
+  document.write = function(h) {
+    return _write.call(this, h);
+  };
+  
+  document.writeln = function(h) {
+    return _writeln.call(this, h);
+  };
+  
+  // webdriver無効化
+  Object.defineProperty(navigator, 'webdriver', {
+    get: () => undefined
+  });
+  
+  // Bot検出対策
+  try {
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [
+        {name: 'Chrome PDF Plugin'},
+        {name: 'Chrome PDF Viewer'},
+        {name: 'Native Client'}
+      ]
+    });
+  } catch (e) {}
+  
+  // Chrome object
+  if (!window.chrome) {
+    window.chrome = {
+      runtime: {},
+      loadTimes: () => {},
+      csi: () => {},
+      app: {}
+    };
   }
 })();
 </script>
 `;
   
-  if (html.includes('</head>')) {
-    html = html.replace('</head>', script + '</head>');
+  // <head>の最初に注入（最優先で実行）
+  if (html.includes('<head>')) {
+    html = html.replace(/<head>/i, '<head>' + script);
   } else {
     html = script + html;
   }
@@ -226,60 +261,75 @@ function rewriteHtml(html, targetUrl) {
 function rewriteCss(css, targetUrl) {
   const baseUrl = new URL(targetUrl).origin;
   
-  // url()を書き換え
-  css = css.replace(/url\(["']?([^)"']+)["']?\)/gi, (match, url) => {
-    if (url.startsWith('data:') || url.startsWith('#')) {
-      return match;
-    }
-    return `url("${rewriteUrl(url, baseUrl)}")`;
+  css = css.replace(/url\(["']?([^)"']+)["']?\)/gi, (m, u) => {
+    if (u.startsWith('data:') || u.startsWith('#')) return m;
+    return `url("${rewriteUrl(u, baseUrl)}")`;
   });
   
-  // @import
-  css = css.replace(/@import\s+["']([^"']+)["']/gi, (match, url) => {
-    return `@import "${rewriteUrl(url, baseUrl)}"`;
+  css = css.replace(/@import\s+["']([^"']+)["']/gi, (m, u) => {
+    return `@import "${rewriteUrl(u, baseUrl)}"`;
   });
   
   return css;
 }
 
 // ================================
-// プロキシエンドポイント（UV方式）
+// プロキシエンドポイント
 // ================================
 app.use(CONFIG.prefix, async (req, res) => {
   try {
-    const encodedUrl = req.url.substring(1); // 先頭の/を削除
+    const encodedUrl = req.url.substring(1);
     
     if (!encodedUrl) {
-      return res.status(400).send('Invalid URL');
+      return res.status(400).send('Bad Request');
     }
     
     let targetUrl;
     try {
       targetUrl = decodeUrl(encodedUrl.split('?')[0]);
     } catch (e) {
-      console.error('Decode error:', e);
-      return res.status(400).send('Invalid URL encoding');
+      return res.status(400).send('Invalid URL');
     }
     
-    console.log('🌐 Proxy:', targetUrl);
+    console.log('→', targetUrl);
     
-    // フェッチ
+    // 完全なブラウザヘッダー
+    const headers = {
+      'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'Accept-Language': req.headers['accept-language'] || 'en-US,en;q=0.9',
+      'Accept-Encoding': req.headers['accept-encoding'] || 'gzip, deflate, br',
+      'Referer': targetUrl,
+      'Origin': new URL(targetUrl).origin,
+      'DNT': '1',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1'
+    };
+    
+    // Sec-* ヘッダー（Chrome模倣）
+    if (req.headers['sec-ch-ua']) headers['Sec-Ch-Ua'] = req.headers['sec-ch-ua'];
+    if (req.headers['sec-ch-ua-mobile']) headers['Sec-Ch-Ua-Mobile'] = req.headers['sec-ch-ua-mobile'];
+    if (req.headers['sec-ch-ua-platform']) headers['Sec-Ch-Ua-Platform'] = req.headers['sec-ch-ua-platform'];
+    if (req.headers['sec-fetch-dest']) headers['Sec-Fetch-Dest'] = req.headers['sec-fetch-dest'];
+    if (req.headers['sec-fetch-mode']) headers['Sec-Fetch-Mode'] = req.headers['sec-fetch-mode'];
+    if (req.headers['sec-fetch-site']) headers['Sec-Fetch-Site'] = req.headers['sec-fetch-site'];
+    
+    // YouTube特化Cookie
+    const parsedUrl = new URL(targetUrl);
+    if (parsedUrl.hostname.includes('youtube.com') || parsedUrl.hostname.includes('youtu.be')) {
+      headers['Cookie'] = 'CONSENT=PENDING+987; SOCS=CAESHAgBEhJnd3NfMjAyNDAxMTAtMF9SQzIaAmVuIAEaBgiAo--mBg';
+    }
+    
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: {
-        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        'Accept': req.headers['accept'] || '*/*',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Referer': targetUrl,
-        'Origin': new URL(targetUrl).origin
-      },
+      headers: headers,
       redirect: 'follow'
     });
     
     const contentType = response.headers.get('content-type') || '';
     
-    // ヘッダー処理
-    const blockedHeaders = [
+    // ブロックヘッダーリスト
+    const blocked = [
       'content-security-policy',
       'content-security-policy-report-only',
       'x-frame-options',
@@ -290,16 +340,17 @@ app.use(CONFIG.prefix, async (req, res) => {
       'transfer-encoding'
     ];
     
-    response.headers.forEach((value, key) => {
-      if (!blockedHeaders.includes(key.toLowerCase())) {
-        res.setHeader(key, value);
+    response.headers.forEach((v, k) => {
+      if (!blocked.includes(k.toLowerCase())) {
+        res.setHeader(k, v);
       }
     });
     
-    // CORS許可
+    // CORS完全許可
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', '*');
     res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('X-Frame-Options', 'ALLOWALL');
     
     // HTML
@@ -318,43 +369,42 @@ app.use(CONFIG.prefix, async (req, res) => {
       return res.send(css);
     }
     
-    // JavaScript/JSON
+    // JS/JSON
     if (contentType.includes('javascript') || contentType.includes('json')) {
       const text = await response.text();
       return res.send(text);
     }
     
-    // バイナリ
+    // Binary
     const buffer = await response.buffer();
     res.send(buffer);
     
   } catch (error) {
-    console.error('Proxy error:', error);
-    res.status(500).send('Proxy Error: ' + error.message);
+    console.error('✗', error.message);
+    res.status(500).send('Error');
   }
 });
 
 // ================================
-// ヘルスチェック
+// Health
 // ================================
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', version: '3.0.0' });
+  res.json({ status: 'ok', v: '3.1.0' });
 });
 
 // ================================
-// SPA対応
+// SPA
 // ================================
 app.get('*', (req, res) => {
   res.sendFile(path.join(publicDir, 'index.html'));
 });
 
 // ================================
-// サーバー起動
+// Start
 // ================================
 app.listen(CONFIG.port, '0.0.0.0', () => {
-  console.log('\n🚀 Transparent Proxy v3.0.0 - UV Style');
-  console.log(`✅ Server: http://0.0.0.0:${CONFIG.port}`);
-  console.log(`✅ Prefix: ${CONFIG.prefix}\n`);
+  console.log(`\n🚀 Transparent Proxy v3.1.0 ULTIMATE`);
+  console.log(`✅ http://0.0.0.0:${CONFIG.port}\n`);
 });
 
 module.exports = app;
