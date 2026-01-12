@@ -1,41 +1,17 @@
 {
   "name": "transparent-proxy",
-  "version": "2.4.0",
-  "description": "完璧超マックス版 - 最強Webプロキシ",
-  "private": true,
-  "type": "commonjs",
+  "version": "3.0.0",
+  "description": "Ultimate Web Proxy",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon src/server.js",
-    "build": "echo 'No build step required'",
-    "test": "echo \"Tests not implemented\" && exit 0"
+    "start": "node src/server.js"
   },
-  "keywords": [
-    "proxy",
-    "web-proxy",
-    "transparent",
-    "bypass",
-    "youtube",
-    "github",
-    "cors"
-  ],
-  "author": "Transparent Network Team",
-  "license": "MIT",
   "dependencies": {
     "express": "^4.18.2",
     "node-fetch": "^2.7.0",
-    "compression": "^1.7.4"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.2"
+    "cheerio": "^1.0.0-rc.12"
   },
   "engines": {
-    "node": ">=18.0.0",
-    "npm": ">=9.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Transparent-Network/Transparent-Proxy.git"
+    "node": ">=18.0.0"
   }
 }
