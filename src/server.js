@@ -1,211 +1,202 @@
+// ⚡ Transparent Proxy v4.0.0
+// 超高速 + 最強版
+
 const express = require('express');
 const fetch = require('node-fetch');
-const compression = require('compression');
-const { LRUCache } = require('lru-cache');
 const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
 
-// 超高速化: gzip圧縮
-app.use(compression());
+// 設定
+const CONFIG = {
+  port: process.env.PORT || 10000,
+  prefix: '/service/',
+};
 
-// 超高速化: 静的ファイルキャッシュ
-app.use(express.static('public', {
+// 静的ファイル
+app.use(express.static(path.join(__dirname, '..', 'public'), {
   maxAge: '1d',
   etag: true
 }));
 
-// 超高速化: HTMLキャッシュ（5分間）
-const htmlCache = new LRUCache({
-  max: 100,
-  ttl: 1000 * 60 * 5
-});
+// XORエンコーディング
+function encodeUrl(url) {
+  const xorKey = 2;
+  const encoded = Buffer.from(url).map(b => b ^ xorKey);
+  return encoded.toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../public/index.html'));
-});
+function decodeUrl(encoded) {
+  const padded = encoded
+    .replace(/-/g, '+')
+    .replace(/_/g, '/') + '==';
+  const xorKey = 2;
+  const decoded = Buffer.from(padded, 'base64').map(b => b ^ xorKey);
+  return decoded.toString('utf8');
+}
 
-// Shadow/Utopia方式: 超高速プロキシ
-app.get('/p/:url(*)', async (req, res) => {
+// URL書き換え
+function rewriteUrl(url, baseUrl) {
+  if (!url || url.startsWith(CONFIG.prefix) || url.match(/^(javascript:|data:|blob:|#|about:)/)) return url;
+  
   try {
-    const encodedUrl = req.params.url;
-    const targetUrl = Buffer.from(encodedUrl, 'base64').toString('utf-8');
-    
-    console.log(`⚡ [ULTRA] ${targetUrl}`);
+    let full;
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      full = url;
+    } else if (url.startsWith('//')) {
+      full = 'https:' + url;
+    } else if (url.startsWith('/')) {
+      full = baseUrl + url;
+    } else {
+      full = new URL(url, baseUrl).href;
+    }
+    return CONFIG.prefix + encodeUrl(full);
+  } catch (e) {
+    return url;
+  }
+}
 
+// HTML書き換え（超高速正規表現）
+function rewriteHtml(html, targetUrl) {
+  const baseUrl = new URL(targetUrl).origin;
+  
+  html = html
+    .replace(/href=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `href="${rewriteUrl(u, baseUrl)}"`)
+    .replace(/src=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `src="${rewriteUrl(u, baseUrl)}"`)
+    .replace(/action=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `action="${rewriteUrl(u, baseUrl)}"`)
+    .replace(/data=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `data="${rewriteUrl(u, baseUrl)}"`)
+    .replace(/poster=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `poster="${rewriteUrl(u, baseUrl)}"`)
+    .replace(/srcset=["']([^"']+)["']/gi, (m, s) => {
+      const r = s.split(',').map(i => {
+        const p = i.trim().split(/\s+/);
+        return `${rewriteUrl(p[0], baseUrl)} ${p[1] || ''}`.trim();
+      }).join(', ');
+      return `srcset="${r}"`;
+    })
+    .replace(/<base[^>]*>/gi, '')
+    .replace(/<meta[^>]*http-equiv=["'](Content-Security-Policy|X-Frame-Options)["'][^>]*>/gi, '');
+
+  // 超軽量スクリプト（1行圧縮）
+  const script = `<script>(function(){if(window.__P)return;window.__P=1;const P='${CONFIG.prefix}',B='${baseUrl}',E=s=>{const x=2,b=[];for(let i=0;i<s.length;i++)b.push(String.fromCharCode(s.charCodeAt(i)^x));return btoa(b.join('')).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=/g,'')},N=u=>{if(!u||typeof u!=='string'||u.match(/^(javascript:|data:|blob:|#|about:)|${CONFIG.prefix}/))return u;try{let f;if(u.startsWith('http://')||u.startsWith('https://'))f=u;else if(u.startsWith('//'))f='https:'+u;else if(u.startsWith('/'))f=B+u;else f=new URL(u,B).href;return P+E(f)}catch(e){return u}};const F=fetch;fetch=(u,o)=>F(N(u),o);const X=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u,...a){return X.call(this,m,N(u),...a)};const W=window.open;window.open=(u,...a)=>W(N(u),...a);const L=Object.getOwnPropertyDescriptor(Location.prototype,'href');if(L&&L.set)Object.defineProperty(location,'href',{get:L.get,set:function(u){L.set.call(this,N(u))}});const H=history,PS=H.pushState,RS=H.replaceState;H.pushState=function(s,t,u){return PS.call(this,s,t,N(u))};H.replaceState=function(s,t,u){return RS.call(this,s,t,N(u))};if('serviceWorker'in navigator){navigator.serviceWorker.getRegistrations().then(r=>r.forEach(x=>x.unregister())).catch(()=>{});try{Object.defineProperty(navigator,'serviceWorker',{get:()=>undefined})}catch(e){}}try{Object.defineProperty(navigator,'webdriver',{get:()=>false})}catch(e){}try{Object.defineProperty(navigator,'plugins',{get:()=>[{name:'Chrome PDF Plugin'}]})}catch(e){}if(!window.chrome)window.chrome={runtime:{},loadTimes:()=>{},csi:()=>{},app:{}}})()</script>`;
+  
+  html = html.replace(/<head>/i, '<head>' + script);
+  
+  return html;
+}
+
+// CSS書き換え
+function rewriteCss(css, targetUrl) {
+  const baseUrl = new URL(targetUrl).origin;
+  return css
+    .replace(/url\(["']?([^)"']+)["']?\)/gi, (m, u) => 
+      u.match(/^(data:|#)/) ? m : `url("${rewriteUrl(u, baseUrl)}")`)
+    .replace(/@import\s+["']([^"']+)["']/gi, (m, u) => 
+      `@import "${rewriteUrl(u, baseUrl)}"`);
+}
+
+// プロキシエンドポイント
+app.use(CONFIG.prefix, async (req, res) => {
+  try {
+    const encodedUrl = req.url.substring(1).split('?')[0];
+    if (!encodedUrl) return res.status(400).send('Bad Request');
+    
+    const targetUrl = decodeUrl(encodedUrl);
+    console.log('→', targetUrl);
+    
     const parsedUrl = new URL(targetUrl);
     
-    // Shadow方式: クライアントヘッダーを完全継承
+    // ブラウザヘッダー
     const headers = {
       'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
       'Accept': req.headers['accept'] || '*/*',
       'Accept-Language': req.headers['accept-language'] || 'ja,en-US;q=0.9,en;q=0.8',
       'Accept-Encoding': 'gzip, deflate, br',
       'Referer': targetUrl,
-      'Origin': `${parsedUrl.protocol}//${parsedUrl.host}`
+      'Origin': parsedUrl.origin
     };
-
-    // すべてのSec-*ヘッダーをコピー
-    Object.keys(req.headers).forEach(key => {
-      if (key.toLowerCase().startsWith('sec-')) {
-        headers[key] = req.headers[key];
-      }
+    
+    // Sec-*ヘッダーコピー
+    Object.keys(req.headers).forEach(k => {
+      if (k.toLowerCase().startsWith('sec-')) headers[k] = req.headers[k];
     });
-
-    // Cookie完全転送（最重要！）
-    if (req.headers['cookie']) {
-      headers['Cookie'] = req.headers['cookie'];
+    
+    // Cookie転送
+    if (req.headers['cookie']) headers['Cookie'] = req.headers['cookie'];
+    
+    // YouTube対策
+    if (parsedUrl.hostname.includes('youtube.com')) {
+      headers['Cookie'] = (headers['Cookie'] || '') + '; CONSENT=PENDING+987; SOCS=CAESHAgBEhJnd3NfMjAyNDAxMTAtMF9SQzIaAmVuIAEaBgiAo--mBg';
     }
-
+    
     const response = await fetch(targetUrl, {
+      method: req.method,
       headers,
-      redirect: 'follow',
-      timeout: 15000
+      redirect: 'follow'
     });
-
+    
     const contentType = response.headers.get('content-type') || '';
     
-    // HTML処理
+    // ブロックヘッダー
+    const blocked = ['content-security-policy', 'content-security-policy-report-only', 'x-frame-options', 
+      'cross-origin-embedder-policy', 'cross-origin-resource-policy', 'cross-origin-opener-policy',
+      'content-encoding', 'transfer-encoding'];
+    
+    response.headers.forEach((v, k) => {
+      if (!blocked.includes(k.toLowerCase())) res.setHeader(k, v);
+    });
+    
+    // CORS許可
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', '*');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('X-Frame-Options', 'ALLOWALL');
+    
+    // Cookie転送
+    const setCookie = response.headers.raw()['set-cookie'];
+    if (setCookie) res.setHeader('Set-Cookie', setCookie);
+    
+    // HTML
     if (contentType.includes('text/html')) {
-      // キャッシュチェック
-      const cached = htmlCache.get(targetUrl);
-      if (cached && !req.query.nocache) {
-        console.log(`✅ [CACHE] ${targetUrl}`);
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('X-Cache', 'HIT');
-        return res.send(cached);
-      }
-
       let html = await response.text();
-      
-      // Shadow方式: 超高速正規表現書き換え
-      html = ultraFastRewrite(html, targetUrl, parsedUrl);
-
-      // キャッシュ保存
-      htmlCache.set(targetUrl, html);
-
-      // レスポンス
+      html = rewriteHtml(html, targetUrl);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('X-Frame-Options', 'ALLOWALL');
-      res.setHeader('X-Cache', 'MISS');
-      
-      const setCookie = response.headers.raw()['set-cookie'];
-      if (setCookie) res.setHeader('Set-Cookie', setCookie);
-
-      res.send(html);
-    } else {
-      // バイナリは直接ストリーム
-      const buffer = await response.buffer();
-      
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Cache-Control', 'public, max-age=86400');
-      
-      const setCookie = response.headers.raw()['set-cookie'];
-      if (setCookie) res.setHeader('Set-Cookie', setCookie);
-
-      res.send(buffer);
+      return res.send(html);
     }
-
+    
+    // CSS
+    if (contentType.includes('text/css')) {
+      let css = await response.text();
+      css = rewriteCss(css, targetUrl);
+      res.setHeader('Content-Type', 'text/css; charset=utf-8');
+      return res.send(css);
+    }
+    
+    // その他
+    const buffer = await response.buffer();
+    res.send(buffer);
+    
   } catch (error) {
-    console.error('❌ [ERROR]', error.message);
+    console.error('✗', error.message);
     res.status(500).send('Error');
   }
 });
 
-// Shadow/Utopia方式: 超高速正規表現書き換え
-function ultraFastRewrite(html, targetUrl, parsedUrl) {
-  const baseUrl = `${parsedUrl.protocol}//${parsedUrl.host}`;
-  
-  const encode = (url) => {
-    try {
-      const absolute = new URL(url, targetUrl).href;
-      return `/p/${Buffer.from(absolute).toString('base64')}`;
-    } catch (e) {
-      return url;
-    }
-  };
+// ヘルスチェック
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-  // 超高速: 一括正規表現置換
-  html = html
-    // href属性
-    .replace(/href=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (match, url) => {
-      return `href="${encode(url)}"`;
-    })
-    // src属性
-    .replace(/src=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (match, url) => {
-      return `src="${encode(url)}"`;
-    })
-    // action属性
-    .replace(/action=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (match, url) => {
-      return `action="${encode(url)}"`;
-    })
-    // CSS url()
-    .replace(/url\(["']?(?!data:|blob:|about:)([^"')]+)["']?\)/gi, (match, url) => {
-      return `url(${encode(url)})`;
-    })
-    // srcset属性
-    .replace(/srcset=["']([^"']+)["']/gi, (match, srcset) => {
-      const newSrcset = srcset.split(',').map(src => {
-        const parts = src.trim().split(/\s+/);
-        if (parts[0] && !parts[0].startsWith('data:') && !parts[0].startsWith('blob:')) {
-          parts[0] = encode(parts[0]);
-        }
-        return parts.join(' ');
-      }).join(', ');
-      return `srcset="${newSrcset}"`;
-    });
+// SPA
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+});
 
-  // Shadow最強スクリプト（超軽量版）
-  const shadowScript = `<script>
-(function(){
-const P='/p/',E=s=>{try{return P+btoa(unescape(encodeURIComponent(s)))}catch(e){return s}},S=u=>typeof u==='string'&&!u.match(/^(data:|blob:|javascript:|#|about:)/);
-const F=fetch;fetch=(u,o)=>F(S(u)?E(u):u,o);
-const X=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u,...a){return X.call(this,m,S(u)?E(u):u,...a)};
-const W=window.open;window.open=(u,...a)=>W(u&&S(u)?E(u):u,...a);
-const L=Object.getOwnPropertyDescriptor(Location.prototype,'href');
-if(L&&L.set){Object.defineProperty(location,'href',{get:L.get,set:function(u){L.set.call(this,S(u)?E(u):u)}})}
-const H=History.prototype;const PS=H.pushState;H.pushState=function(s,t,u){return PS.call(this,s,t,u&&S(u)?E(u):u)};
-const RS=H.replaceState;H.replaceState=function(s,t,u){return RS.call(this,s,t,u&&S(u)?E(u):u)};
-if('serviceWorker'in navigator){navigator.serviceWorker.getRegistrations().then(r=>r.forEach(x=>x.unregister())).catch(()=>{});try{Object.defineProperty(navigator,'serviceWorker',{get:()=>undefined})}catch(e){}}
-try{delete navigator.__proto__.webdriver;Object.defineProperty(navigator,'webdriver',{get:()=>false})}catch(e){}
-try{window.chrome={runtime:{},loadTimes:()=>{},csi:()=>{},app:{}}}catch(e){}
-})();
-</script>`;
+// サーバー起動
+app.listen(CONFIG.port, '0.0.0.0', () => {
+  console.log(`\n⚡ Proxy Server Running`);
+  console.log(`✅ Port: ${CONFIG.port}\n`);
+});
 
-  // <head>の直後に注入
-  html = html.replace(/<head([^>]*)>/i, `<head$1>${shadowScript}`);
-  
-  // CSP削除
-  html = html.replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '');
-
-  return html;
-}
-
-app.get('/health', (req, res) => res.send('OK'));
-
-// クラスタリング対応
-const cluster = require('cluster');
-const os = require('os');
-
-if (cluster.isMaster && process.env.NODE_ENV === 'production') {
-  const numCPUs = os.cpus().length;
-  console.log(`🚀 [MASTER] Forking ${numCPUs} workers...`);
-  
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork();
-  }
-
-  cluster.on('exit', (worker) => {
-    console.log(`⚠️ Worker ${worker.process.pid} died, restarting...`);
-    cluster.fork();
-  });
-} else {
-  app.listen(PORT, () => {
-    console.log(`⚡ [ULTRA-FAST] Worker ${process.pid} on port ${PORT}`);
-  });
-}
+module.exports = app;
