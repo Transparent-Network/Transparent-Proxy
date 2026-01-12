@@ -261,3 +261,5 @@ MIT License - 詳細は [LICENSE](../LICENSE) を参照
 ---
 
 **Made with by Transparent Proxy Team**
+### 確認用URL:
+### https://abcd-tym2.onrender.com
