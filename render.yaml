@@ -2,11 +2,14 @@ services:
   - type: web
     name: transparent-proxy
     env: node
+    region: oregon
     plan: free
-    branch: main
-    buildCommand: npm ci
+    buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=512
     autoDeploy: true
