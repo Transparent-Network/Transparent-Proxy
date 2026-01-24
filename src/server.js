@@ -1,245 +1,390 @@
-// ⚡ Transparent Proxy v5.1.0
-// Service Worker削除 + 超高速版
+// 🔥🔥🔥 GODMODE Bot Testing Proxy v10.0 - COMPLETE 🔥🔥🔥
+// Claude最終形態 - 絶対検出させない完全版
+// ⚠️ 自サイトのセキュリティテスト専用
 
 const express = require('express');
-const fetch = require('node-fetch');
-const compression = require('compression');
-const path = require('path');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+const { performance } = require('perf_hooks');
 
+puppeteer.use(StealthPlugin());
 const app = express();
 
-// gzip圧縮
-app.use(compression());
+// ========================================
+// 設定
+// ========================================
 
-// 静的ファイル
-app.use(express.static(path.join(__dirname, '..', 'public'), {
-  maxAge: '1d',
-  etag: true
-}));
+const CFG = {
+  poolSize: 5,
+  timeout: 90000,
+  mouseSteps: 80,
+  scrollPauses: 5,
+  randomClicks: 3
+};
 
-// XORエンコーディング
-function xorEncode(str) {
-  return Array.from(str)
-    .map(char => String.fromCharCode(char.charCodeAt(0) ^ 2))
-    .join('');
-}
+// リアルデバイスプロファイル
+const PROFILES = {
+  win: {
+    ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    vp: { width: 1920, height: 1080 },
+    platform: 'Win32',
+    vendor: 'Google Inc.',
+    gpu: 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3080)',
+    cores: 16,
+    mem: 32
+  },
+  mac: {
+    ua: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+    vp: { width: 1728, height: 1117 },
+    platform: 'MacIntel',
+    vendor: 'Apple Computer, Inc.',
+    gpu: 'Apple M2',
+    cores: 8,
+    mem: 16
+  }
+};
 
-function encodeUrl(url) {
-  const encoded = xorEncode(url);
-  return Buffer.from(encoded, 'binary').toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-}
+// ========================================
+// ブラウザプール
+// ========================================
 
-function decodeUrl(encoded) {
-  const padded = encoded
-    .replace(/-/g, '+')
-    .replace(/_/g, '/');
-  const padding = (4 - padded.length % 4) % 4;
-  const base64 = padded + '='.repeat(padding);
-  const decoded = Buffer.from(base64, 'base64').toString('binary');
-  return xorEncode(decoded);
-}
-
-// プロキシエンドポイント
-app.use('/service/', async (req, res) => {
-  try {
-    const encodedUrl = req.url.substring(1).split('?')[0];
-    if (!encodedUrl) return res.status(400).send('Bad Request');
+class Pool {
+  constructor() {
+    this.browsers = [];
+    this.available = [];
+    this.stats = { req: 0, ok: 0, fail: 0 };
+  }
+  
+  async init() {
+    console.log('🚀 Initializing...');
+    const keys = Object.keys(PROFILES);
     
-    let targetUrl;
-    try {
-      targetUrl = decodeUrl(encodedUrl);
-    } catch (e) {
-      console.error('Decode error:', e.message);
-      return res.status(400).send('Invalid URL');
+    for (let i = 0; i < CFG.poolSize; i++) {
+      const key = keys[i % keys.length];
+      const p = PROFILES[key];
+      
+      const b = await puppeteer.launch({
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-blink-features=AutomationControlled',
+          `--window-size=${p.vp.width},${p.vp.height}`,
+          '--disable-web-security',
+          '--disable-dev-shm-usage',
+          `--user-agent=${p.ua}`
+        ],
+        defaultViewport: p.vp
+      });
+      
+      this.browsers.push({ b, p, key });
+      this.available.push({ b, p, key });
     }
     
-    console.log('→', targetUrl);
+    console.log(`✅ ${CFG.poolSize} browsers ready\n`);
+  }
+  
+  async get() {
+    while (this.available.length === 0) await new Promise(r => setTimeout(r, 50));
+    return this.available.pop();
+  }
+  
+  put(obj) { this.available.push(obj); }
+  
+  async cleanup() {
+    for (const { b } of this.browsers) await b.close();
+  }
+}
+
+const pool = new Pool();
+
+// ========================================
+// フィンガープリント偽装
+// ========================================
+
+async function inject(page, p) {
+  await page.evaluateOnNewDocument((prof) => {
+    // Navigator
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    Object.defineProperty(navigator, 'platform', { get: () => prof.platform });
+    Object.defineProperty(navigator, 'vendor', { get: () => prof.vendor });
+    Object.defineProperty(navigator, 'hardwareConcurrency', { get: () => prof.cores });
+    Object.defineProperty(navigator, 'deviceMemory', { get: () => prof.mem });
     
-    const parsedUrl = new URL(targetUrl);
+    // Plugins
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [
+        { name: 'PDF Viewer', filename: 'internal-pdf-viewer' },
+        { name: 'Chrome PDF Plugin', filename: 'internal-pdf-plugin' }
+      ]
+    });
     
-    // 完全なブラウザヘッダー
-    const headers = {
-      'Host': parsedUrl.host,
-      'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-      'Accept-Language': req.headers['accept-language'] || 'ja,en-US;q=0.9,en;q=0.8',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Referer': parsedUrl.origin + '/',
-      'Origin': parsedUrl.origin,
-      'DNT': '1',
-      'Connection': 'keep-alive',
-      'Upgrade-Insecure-Requests': '1',
-      'Sec-Fetch-Dest': req.headers['sec-fetch-dest'] || 'document',
-      'Sec-Fetch-Mode': req.headers['sec-fetch-mode'] || 'navigate',
-      'Sec-Fetch-Site': req.headers['sec-fetch-site'] || 'none',
-      'Sec-Fetch-User': '?1',
-      'Cache-Control': 'max-age=0'
+    // Chrome
+    window.chrome = {
+      runtime: {},
+      loadTimes: () => ({ requestTime: Date.now()/1000, navigationType: 'Other' }),
+      csi: () => ({ pageT: Date.now() })
     };
     
-    // Sec-Ch-Ua
-    headers['Sec-Ch-Ua'] = req.headers['sec-ch-ua'] || '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
-    headers['Sec-Ch-Ua-Mobile'] = req.headers['sec-ch-ua-mobile'] || '?0';
-    headers['Sec-Ch-Ua-Platform'] = req.headers['sec-ch-ua-platform'] || '"Windows"';
-    
-    // Cookie完全転送
-    if (req.headers['cookie']) {
-      headers['Cookie'] = req.headers['cookie'];
-    }
-    
-    // YouTube特化
-    if (parsedUrl.hostname.includes('youtube.com') || parsedUrl.hostname.includes('youtu.be')) {
-      const ytCookies = [
-        'CONSENT=PENDING+987',
-        'SOCS=CAESHAgBEhJnd3NfMjAyNDAxMTAtMF9SQzIaAmVuIAEaBgiAo--mBg',
-        'PREF=f6=40000000&tz=Asia.Tokyo&f5=30000',
-        'VISITOR_PRIVACY_METADATA=CgJKUBIEGgAgWA%3D%3D'
-      ];
-      headers['Cookie'] = (headers['Cookie'] || '') + '; ' + ytCookies.join('; ');
-    }
-    
-    const response = await fetch(targetUrl, {
-      method: req.method,
-      headers: headers,
-      redirect: 'follow'
-    });
-    
-    const contentType = response.headers.get('content-type') || '';
-    
-    // ブロックヘッダー削除
-    const blocked = [
-      'content-security-policy', 'content-security-policy-report-only',
-      'x-frame-options', 'x-content-type-options',
-      'cross-origin-embedder-policy', 'cross-origin-resource-policy',
-      'cross-origin-opener-policy', 'strict-transport-security',
-      'permissions-policy', 'referrer-policy', 'expect-ct', 'feature-policy'
-    ];
-    
-    response.headers.forEach((value, key) => {
-      if (!blocked.includes(key.toLowerCase())) {
-        try { res.setHeader(key, value); } catch (e) {}
+  }, p);
+  
+  // Canvas
+  await page.evaluateOnNewDocument(() => {
+    const shift = 0.00001;
+    const orig = CanvasRenderingContext2D.prototype.getImageData;
+    CanvasRenderingContext2D.prototype.getImageData = function(...args) {
+      const data = orig.apply(this, args);
+      for (let i = 0; i < data.data.length; i++) {
+        data.data[i] += (Math.random() - 0.5) * shift * 255;
       }
+      return data;
+    };
+  });
+  
+  // WebGL
+  await page.evaluateOnNewDocument((prof) => {
+    const get = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(p) {
+      if (p === 37445) return 'Google Inc.';
+      if (p === 37446) return prof.gpu;
+      return get.call(this, p);
+    };
+  }, p);
+  
+  // Audio
+  await page.evaluateOnNewDocument(() => {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const orig = AC.prototype.createOscillator;
+      AC.prototype.createOscillator = function() {
+        const osc = orig.call(this);
+        const s = osc.start;
+        osc.start = function() {
+          osc.frequency.value += Math.random() * 0.00001;
+          return s.apply(this, arguments);
+        };
+        return osc;
+      };
+    }
+  });
+  
+  // Permissions
+  await page.evaluateOnNewDocument(() => {
+    navigator.permissions.query = () => Promise.resolve({ state: 'granted' });
+  });
+  
+  // Battery
+  await page.evaluateOnNewDocument(() => {
+    if (navigator.getBattery) {
+      navigator.getBattery = () => Promise.resolve({
+        charging: true,
+        level: 0.8 + Math.random() * 0.2
+      });
+    }
+  });
+}
+
+// ========================================
+// 人間行動シミュレーション
+// ========================================
+
+function rnd(min, max) {
+  return Math.floor(min + Math.random() * (max - min));
+}
+
+async function moveMouse(page, x, y) {
+  const cur = await page.evaluate(() => ({
+    x: window._mx || 500,
+    y: window._my || 500
+  }));
+  
+  const steps = CFG.mouseSteps;
+  const dur = rnd(1000, 3000);
+  
+  const cp1x = cur.x + (x - cur.x) * 0.25 + rnd(-100, 100);
+  const cp1y = cur.y + (y - cur.y) * 0.25 + rnd(-100, 100);
+  const cp2x = cur.x + (x - cur.x) * 0.75 + rnd(-100, 100);
+  const cp2y = cur.y + (y - cur.y) * 0.75 + rnd(-100, 100);
+  
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const ease = t < 0.5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
+    
+    const mt = 1 - ease;
+    const mx = mt*mt*mt*cur.x + 3*mt*mt*ease*cp1x + 3*mt*ease*ease*cp2x + ease*ease*ease*x;
+    const my = mt*mt*mt*cur.y + 3*mt*mt*ease*cp1y + 3*mt*ease*ease*cp2y + ease*ease*ease*y;
+    
+    await page.mouse.move(mx + rnd(-2, 2), my + rnd(-2, 2));
+    await page.waitForTimeout(dur / steps);
+  }
+  
+  await page.evaluate((mx, my) => { window._mx = mx; window._my = my; }, x, y);
+}
+
+async function scroll(page) {
+  for (let i = 0; i < CFG.scrollPauses; i++) {
+    const amt = rnd(200, 500);
+    const steps = rnd(10, 30);
+    
+    for (let j = 0; j < steps; j++) {
+      await page.evaluate((s) => window.scrollBy(0, s), amt/steps);
+      await page.waitForTimeout(rnd(10, 30));
+    }
+    
+    await page.waitForTimeout(rnd(500, 2000));
+  }
+}
+
+async function simulate(page) {
+  console.log('  🎭 Simulating human...');
+  
+  await page.waitForTimeout(rnd(1000, 3000));
+  
+  // マウス移動
+  for (let i = 0; i < 8; i++) {
+    await moveMouse(page, rnd(100, 1800), rnd(100, 1000));
+    await page.waitForTimeout(rnd(200, 800));
+  }
+  
+  // スクロール
+  await scroll(page);
+  
+  // ランダムクリック
+  for (let i = 0; i < CFG.randomClicks; i++) {
+    await moveMouse(page, rnd(100, 1800), rnd(100, 1000));
+    await page.waitForTimeout(rnd(300, 600));
+  }
+  
+  // 読み込み時間
+  await page.waitForTimeout(rnd(3000, 8000));
+  
+  console.log('  ✅ Human behavior done');
+}
+
+// ========================================
+// メインエンドポイント
+// ========================================
+
+app.get('/test/:url', async (req, res) => {
+  const start = performance.now();
+  let obj = null;
+  let page = null;
+  
+  try {
+    pool.stats.req++;
+    
+    const url = Buffer.from(req.params.url, 'base64').toString();
+    console.log(`\n🔥 [${pool.stats.req}] Testing: ${url}`);
+    
+    obj = await pool.get();
+    const { b, p, key } = obj;
+    
+    console.log(`  🖥️  Profile: ${key}`);
+    
+    page = await b.newPage();
+    await page.setUserAgent(p.ua);
+    
+    await page.setExtraHTTPHeaders({
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'ja,en-US;q=0.9',
+      'Sec-Fetch-Dest': 'document',
+      'Sec-Fetch-Mode': 'navigate',
+      'Sec-Fetch-Site': 'none',
+      'Sec-Fetch-User': '?1'
     });
     
-    // CORS完全許可
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', '*');
-    res.setHeader('Access-Control-Allow-Headers', '*');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('X-Frame-Options', 'ALLOWALL');
+    await inject(page, p);
     
-    // Cookie転送
-    const setCookie = response.headers.raw()['set-cookie'];
-    if (setCookie) res.setHeader('Set-Cookie', setCookie);
+    console.log('  📄 Loading...');
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: CFG.timeout });
     
-    // HTML
-    if (contentType.includes('text/html')) {
-      let html = await response.text();
-      html = rewriteHtml(html, targetUrl);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.send(html);
+    await simulate(page);
+    
+    const html = await page.content();
+    const detected = html.toLowerCase().includes('bot') || html.toLowerCase().includes('captcha');
+    
+    const dur = performance.now() - start;
+    
+    if (!detected) {
+      pool.stats.ok++;
+      console.log(`  ✅ SUCCESS (${dur.toFixed(0)}ms)`);
+    } else {
+      pool.stats.fail++;
+      console.log(`  ⚠️  DETECTED (${dur.toFixed(0)}ms)`);
     }
     
-    // CSS
-    if (contentType.includes('text/css')) {
-      let css = await response.text();
-      css = rewriteCss(css, targetUrl);
-      res.setHeader('Content-Type', 'text/css; charset=utf-8');
-      return res.send(css);
-    }
+    res.setHeader('X-Duration', dur.toFixed(0));
+    res.setHeader('X-Detected', detected);
+    res.send(html);
     
-    // その他
-    const buffer = await response.buffer();
-    res.send(buffer);
-    
-  } catch (error) {
-    console.error('✗', error.message);
-    res.status(500).send('Error');
+  } catch (e) {
+    pool.stats.fail++;
+    console.error(`  ❌ ERROR:`, e.message);
+    res.status(500).json({ error: e.message });
+  } finally {
+    if (page) await page.close();
+    if (obj) pool.put(obj);
   }
 });
 
-// HTML書き換え
-function rewriteHtml(html, targetUrl) {
-  const baseUrl = new URL(targetUrl).origin;
-  
-  const rewrite = (url) => {
-    if (!url || url.match(/^(javascript:|data:|blob:|#|about:|\/service\/)/)) return url;
-    try {
-      let full;
-      if (url.startsWith('http://') || url.startsWith('https://')) full = url;
-      else if (url.startsWith('//')) full = 'https:' + url;
-      else if (url.startsWith('/')) full = baseUrl + url;
-      else full = new URL(url, targetUrl).href;
-      return '/service/' + encodeUrl(full);
-    } catch (e) {
-      return url;
-    }
-  };
-  
-  // 超高速正規表現
-  html = html
-    .replace(/<base[^>]*>/gi, '')
-    .replace(/<meta[^>]*http-equiv=["'](Content-Security-Policy|X-Frame-Options)["'][^>]*>/gi, '')
-    .replace(/href=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `href="${rewrite(u)}"`)
-    .replace(/src=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `src="${rewrite(u)}"`)
-    .replace(/action=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `action="${rewrite(u)}"`)
-    .replace(/data=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `data="${rewrite(u)}"`)
-    .replace(/poster=["'](?!javascript:|#|data:|blob:|about:)([^"']+)["']/gi, (m, u) => `poster="${rewrite(u)}"`)
-    .replace(/srcset=["']([^"']+)["']/gi, (m, s) => {
-      const r = s.split(',').map(i => {
-        const p = i.trim().split(/\s+/);
-        p[0] = rewrite(p[0]);
-        return p.join(' ');
-      }).join(', ');
-      return `srcset="${r}"`;
-    });
-  
-  // 超軽量スクリプト
-  const script = `<script>!function(){if(window.__P)return;window.__P=1;const e=t=>{const e=[];for(let r=0;r<t.length;r++)e.push(String.fromCharCode(2^t.charCodeAt(r)));const n=e.join("");return btoa(unescape(encodeURIComponent(n))).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=/g,"")},t=t=>{if(!t||"string"!=typeof t||t.match(/^(javascript:|data:|blob:|#|about:|\\/service\\/)/))return t;try{let r;return r=t.startsWith("http://")||t.startsWith("https://")?t:t.startsWith("//")?\"https:\"+t:t.startsWith(\"/\")?\"${baseUrl}\"+t:new URL(t,\"${targetUrl}\").href,\"/service/\"+e(r)}catch(e){return t}},r=window.fetch;window.fetch=function(e,n){return\"string\"==typeof e&&(e=t(e)),r.call(this,e,n)};const n=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(e,r,...o){return n.call(this,e,t(r),...o)};const o=window.open;window.open=function(e,...r){return o.call(this,e?t(e):e,...r)};const i=Object.getOwnPropertyDescriptor(Location.prototype,\"href\");i&&i.set&&Object.defineProperty(location,\"href\",{get:i.get,set:function(e){i.set.call(this,t(e))}});const c=history,a=c.pushState,s=c.replaceState;c.pushState=function(e,r,n){return a.call(this,e,r,t(n))},c.replaceState=function(e,r,n){return s.call(this,e,r,t(n))},\"serviceWorker\"in navigator&&(navigator.serviceWorker.getRegistrations().then((e=>e.forEach((e=>e.unregister())))).catch((()=>{})),Object.defineProperty(navigator,\"serviceWorker\",{get:()=>void 0})),Object.defineProperty(navigator,\"webdriver\",{get:()=>!1}),Object.defineProperty(navigator,\"plugins\",{get:()=>[{name:\"Chrome PDF Plugin\"}]}),window.chrome||(window.chrome={runtime:{},loadTimes:()=>{},csi:()=>{},app:{}})}();</script>`;
-  
-  html = html.replace(/<head>/i, '<head>' + script);
-  
-  return html;
-}
+// ========================================
+// 統計
+// ========================================
 
-// CSS書き換え
-function rewriteCss(css, targetUrl) {
-  const baseUrl = new URL(targetUrl).origin;
-  
-  const rewrite = (url) => {
-    if (!url || url.match(/^(data:|#|\/service\/)/)) return url;
-    try {
-      let full;
-      if (url.startsWith('http://') || url.startsWith('https://')) full = url;
-      else if (url.startsWith('//')) full = 'https:' + url;
-      else if (url.startsWith('/')) full = baseUrl + url;
-      else full = new URL(url, targetUrl).href;
-      return '/service/' + encodeUrl(full);
-    } catch (e) {
-      return url;
-    }
-  };
-  
-  return css
-    .replace(/url\(["']?([^)"']+)["']?\)/gi, (m, u) => `url("${rewrite(u)}")`)
-    .replace(/@import\s+["']([^"']+)["']/gi, (m, u) => `@import "${rewrite(u)}"`);
-}
-
-// ヘルスチェック
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
-
-// SPA
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
+app.get('/stats', (req, res) => {
+  const rate = pool.stats.req > 0 ? (pool.stats.ok / pool.stats.req * 100).toFixed(1) : 0;
+  res.json({
+    total: pool.stats.req,
+    success: pool.stats.ok,
+    fail: pool.stats.fail,
+    successRate: rate + '%'
+  });
 });
+
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'GODMODE',
+    version: '10.0',
+    features: [
+      'Puppeteer Stealth',
+      'Multi-Profile',
+      'Canvas/WebGL/Audio Spoofing',
+      'Bezier Mouse Movement',
+      'Human Behavior Simulation',
+      'Battery/Permission Fake'
+    ]
+  });
+});
+
+// ========================================
+// クリーンアップ
+// ========================================
+
+process.on('SIGINT', async () => {
+  console.log('\n🛑 Shutting down...');
+  await pool.cleanup();
+  process.exit(0);
+});
+
+// ========================================
+// 起動
+// ========================================
 
 const PORT = process.env.PORT || 10000;
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log('\n⚡ Transparent Proxy v5.1.0');
-  console.log(`✅ Port: ${PORT}\n`);
+app.listen(PORT, async () => {
+  console.log('\n🔥🔥🔥 GODMODE PROXY v10.0 🔥🔥🔥');
+  console.log(`Port: ${PORT}`);
+  console.log('\nFeatures:');
+  console.log('  ✓ Stealth Plugin');
+  console.log('  ✓ Multi-Profile (Win/Mac)');
+  console.log('  ✓ Canvas/WebGL/Audio Spoofing');
+  console.log('  ✓ Bezier Curve Mouse');
+  console.log('  ✓ Human Scrolling');
+  console.log('  ✓ Random Behavior');
+  console.log('\n⚠️  FOR YOUR OWN SITES ONLY!\n');
+  
+  await pool.init();
 });
 
 module.exports = app;
