@@ -1,3 +1,9 @@
+# 開発は終了しました。
+
+
+
+
+
 #  Transparent Proxy v2.1.0
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
